@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Eye, Contact, MessageSquareQuote, CheckCircle2, ArrowRight } from 'lucide-react';
+import { BookOpen, Eye, Contact, MessageSquareQuote, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
 
 export default function Home() {
   const [formData, setFormData] = useState({
@@ -7,7 +7,7 @@ export default function Home() {
     studentId: '',
     program: '',
     faculty: '',
-    campus: '', // เพิ่ม State สำหรับเก็บข้อมูลวิทยาเขต
+    campus: '',
     q1: '',
     q2: '',
     q3: ''
@@ -19,216 +19,209 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] font-sans text-gray-800 flex flex-col">
-      {/* Top Navbar */}
-      <header className="bg-white border-b px-8 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <div className="bg-[#1C5F4A] p-2 rounded-lg text-white">
-            <BookOpen size={20} />
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-hidden">
+      
+      {/* 3D Background Glow Effects */}
+      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-emerald-300/30 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] right-[-5%] w-[40rem] h-[40rem] bg-teal-300/20 rounded-full blur-3xl pointer-events-none"></div>
+
+      {/* Top Navbar (Glassmorphism) */}
+      <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-white/50 px-6 py-4 flex justify-between items-center shadow-sm">
+        <div className="flex items-center gap-3 md:gap-4">
+          <div className="bg-gradient-to-br from-emerald-400 to-teal-700 p-2.5 rounded-xl text-white shadow-lg shadow-emerald-500/30 transform hover:scale-105 transition-transform">
+            <BookOpen size={22} strokeWidth={2.5} />
           </div>
           <div>
-            <h1 className="font-bold text-gray-900 leading-tight">พื้นที่การเรียนรู้</h1>
-            <p className="text-xs text-gray-500">งานพัฒนานักศึกษา</p>
+            <h1 className="font-extrabold text-slate-900 text-lg leading-tight tracking-tight">พื้นที่การเรียนรู้</h1>
+            <p className="text-[11px] font-medium text-emerald-600 uppercase tracking-wider">งานพัฒนานักศึกษา</p>
           </div>
         </div>
-        <button className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">
+        <button className="hidden md:flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-900 bg-white border border-slate-200 px-4 py-2 rounded-full shadow-sm hover:shadow-md transition-all">
           <Eye size={16} />
           แบบฟอร์มสำหรับนักศึกษา
         </button>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto w-full px-4 py-10 flex-1">
+      <main className="max-w-4xl mx-auto w-full px-4 py-12 flex-1 relative z-10">
+        
         {/* Page Header */}
-        <div className="mb-8">
-          <p className="text-sm text-gray-500 mb-2">ทบทวน • เรียนรู้ • เติบโต</p>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">บันทึกการเรียนรู้ของคุณ</h2>
-          <p className="text-gray-600">กรอกข้อมูลนักศึกษา แล้วแบ่งปันประสบการณ์และมุมมองจากการเรียนรู้ของคุณ</p>
+        <div className="text-center mb-12">
+          <span className="inline-flex items-center gap-1.5 py-1.5 px-4 rounded-full bg-emerald-100/80 text-emerald-700 text-xs font-bold tracking-widest mb-4 border border-emerald-200 shadow-sm backdrop-blur-sm">
+            <Sparkles size={14} /> ทบทวน • เรียนรู้ • เติบโต
+          </span>
+          <h2 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-800 to-teal-600 mb-3 drop-shadow-sm">
+            บันทึกการเรียนรู้ของคุณ
+          </h2>
+          <p className="text-slate-500 font-medium">กรอกข้อมูลนักศึกษา แล้วแบ่งปันประสบการณ์และมุมมองจากการเรียนรู้ของคุณ</p>
         </div>
 
-        <form className="space-y-6">
+        <form className="space-y-8">
+          
           {/* Section 1: ข้อมูลนักศึกษา */}
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex items-center gap-3 mb-6">
-              <Contact className="text-gray-400" size={24} />
+          <div className="bg-white/80 backdrop-blur-xl p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-500">
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+            
+            <div className="flex items-center gap-4 mb-8">
+              <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 shadow-inner">
+                <Contact size={26} strokeWidth={2} />
+              </div>
               <div>
-                <h3 className="text-lg font-bold text-gray-900">ข้อมูลนักศึกษา</h3>
-                <p className="text-sm text-gray-500">โปรดกรอกข้อมูลให้ครบถ้วน ข้อมูลที่มี * จำเป็นต้องกรอก</p>
+                <h3 className="text-xl font-bold text-slate-800">ข้อมูลนักศึกษา</h3>
+                <p className="text-sm text-slate-500 mt-1">โปรดกรอกข้อมูลให้ครบถ้วน ข้อมูลที่มี <span className="text-rose-500 font-bold">*</span> จำเป็นต้องกรอก</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">ชื่อ-นามสกุล *</label>
-                <input
-                  type="text"
-                  name="fullName"
-                  value={formData.fullName}
-                  onChange={handleChange}
-                  placeholder="กรอกชื่อและนามสกุล"
-                  className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1C5F4A]/20 focus:border-[#1C5F4A] transition-all"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">รหัสนักศึกษา *</label>
-                <input
-                  type="text"
-                  name="studentId"
-                  value={formData.studentId}
-                  onChange={handleChange}
-                  placeholder="กรอกรหัสนักศึกษา"
-                  className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1C5F4A]/20 focus:border-[#1C5F4A] transition-all"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">หลักสูตร *</label>
-                <input
-                  type="text"
-                  name="program"
-                  value={formData.program}
-                  onChange={handleChange}
-                  placeholder="เช่น วิทยาศาสตรบัณฑิต"
-                  className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1C5F4A]/20 focus:border-[#1C5F4A] transition-all"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">คณะ *</label>
-                <input
-                  type="text"
-                  name="faculty"
-                  value={formData.faculty}
-                  onChange={handleChange}
-                  placeholder="เช่น คณะวิทยาศาสตร์"
-                  className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1C5F4A]/20 focus:border-[#1C5F4A] transition-all"
-                />
-              </div>
+              {[
+                { label: 'ชื่อ-นามสกุล', name: 'fullName', placeholder: 'เช่น สมชาย ใจดี' },
+                { label: 'รหัสนักศึกษา', name: 'studentId', placeholder: 'เช่น 6401234567' },
+                { label: 'หลักสูตร', name: 'program', placeholder: 'เช่น วิทยาศาสตรบัณฑิต' },
+                { label: 'คณะ', name: 'faculty', placeholder: 'เช่น คณะวิทยาศาสตร์' },
+              ].map((field) => (
+                <div key={field.name} className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700 ml-1">{field.label} <span className="text-rose-500">*</span></label>
+                  <input
+                    type="text"
+                    name={field.name}
+                    value={formData[field.name]}
+                    onChange={handleChange}
+                    placeholder={field.placeholder}
+                    className="w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500 transition-all duration-300 shadow-sm text-slate-700 placeholder:text-slate-400"
+                  />
+                </div>
+              ))}
               
-              {/* ช่องเลือกวิทยาเขต (ขยายเต็ม 2 คอลัมน์) */}
+              {/* ช่องเลือกวิทยาเขต */}
               <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium text-gray-700">วิทยาเขต / ศูนย์การศึกษา *</label>
-                <select
-                  name="campus"
-                  value={formData.campus}
-                  onChange={handleChange}
-                  className={`w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1C5F4A]/20 focus:border-[#1C5F4A] transition-all bg-white ${formData.campus === '' ? 'text-gray-400' : 'text-gray-900'}`}
-                >
-                  <option value="" disabled>เลือกวิทยาเขต / ศูนย์การศึกษา</option>
-                  <option value="ภายในมหาวิทยาลัย">ภายในมหาวิทยาลัย</option>
-                  <option value="ศูนย์วิทยาศาสตร์">ศูนย์วิทยาศาสตร์</option>
-                  <option value="วิทยาเขตสุพรรณบุรี">วิทยาเขตสุพรรณบุรี</option>
-                </select>
+                <label className="text-sm font-semibold text-slate-700 ml-1">วิทยาเขต / ศูนย์การศึกษา <span className="text-rose-500">*</span></label>
+                <div className="relative">
+                  <select
+                    name="campus"
+                    value={formData.campus}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500 transition-all duration-300 shadow-sm appearance-none cursor-pointer ${formData.campus === '' ? 'text-slate-400' : 'text-slate-700'}`}
+                  >
+                    <option value="" disabled>เลือกวิทยาเขต / ศูนย์การศึกษา</option>
+                    <option value="ภายในมหาวิทยาลัย">ภายในมหาวิทยาลัย</option>
+                    <option value="ศูนย์วิทยาศาสตร์">ศูนย์วิทยาศาสตร์</option>
+                    <option value="วิทยาเขตสุพรรณบุรี">วิทยาเขตสุพรรณบุรี</option>
+                  </select>
+                  {/* Custom Arrow for Select */}
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Section 2: คำถามสะท้อนการเรียนรู้ */}
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex items-center gap-3 mb-6">
-              <MessageSquareQuote className="text-gray-400" size={24} />
+          <div className="bg-white/80 backdrop-blur-xl p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-500">
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-teal-500 to-emerald-400"></div>
+            
+            <div className="flex items-center gap-4 mb-6">
+              <div className="p-3 bg-teal-50 rounded-2xl text-teal-600 shadow-inner">
+                <MessageSquareQuote size={26} strokeWidth={2} />
+              </div>
               <div>
-                <h3 className="text-lg font-bold text-gray-900">คำถามสะท้อนการเรียนรู้</h3>
-                <p className="text-sm text-gray-500">พิมพ์คำตอบของคุณในช่องข้อความให้ครบทั้ง ๓ ข้อ</p>
+                <h3 className="text-xl font-bold text-slate-800">คำถามสะท้อนการเรียนรู้</h3>
+                <p className="text-sm text-slate-500 mt-1">พิมพ์คำตอบของคุณในช่องข้อความให้ครบทั้ง ๓ ข้อ</p>
               </div>
             </div>
             
-            <hr className="border-gray-100 mb-6" />
+            <hr className="border-slate-100 mb-8" />
 
-            <div className="space-y-8">
-              {/* Question 1 */}
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-800 block">
-                  ๑. สิ่งสำคัญที่สุดที่คุณได้เรียนรู้ในการศึกษานี้คืออะไร *
-                  <span className="block font-normal text-gray-500 text-xs mt-1">เล่าถึงความรู้ ทักษะ หรือมุมมองใหม่ พร้อมยกตัวอย่างประกอบ จากประสบการณ์ของคุณ</span>
-                </label>
-                <div className="relative">
-                  <textarea
-                    name="q1"
-                    value={formData.q1}
-                    onChange={handleChange}
-                    placeholder="สิ่งที่คุณได้เรียนรู้คือ..."
-                    rows={4}
-                    maxLength={1000}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1C5F4A]/20 focus:border-[#1C5F4A] transition-all resize-none"
-                  ></textarea>
-                  <div className="absolute bottom-3 right-3 text-xs text-gray-400">
-                    {formData.q1.length} / 1,000 ตัวอักษร
+            <div className="space-y-10">
+              {[
+                { 
+                  id: 'q1', 
+                  title: '๑. สิ่งสำคัญที่สุดที่คุณได้เรียนรู้ในการศึกษานี้คืออะไร', 
+                  desc: 'เล่าถึงความรู้ ทักษะ หรือมุมมองใหม่ พร้อมยกตัวอย่างประกอบ จากประสบการณ์ของคุณ',
+                  placeholder: 'สิ่งที่คุณได้เรียนรู้คือ...'
+                },
+                { 
+                  id: 'q2', 
+                  title: '๒. คุณพบความท้าทายอะไร และรับมือกับสิ่งนั้นอย่างไร', 
+                  desc: 'อาจเป็นเรื่องการเรียน การทำงานร่วมกับผู้อื่น หรือการจัดการเวลา',
+                  placeholder: 'ความท้าทายที่ค้นพบ และวิธีที่รับมือคือ...'
+                },
+                { 
+                  id: 'q3', 
+                  title: '๓. คุณจะนำสิ่งที่ได้เรียนรู้ไปใช้อย่างไร', 
+                  desc: 'แบ่งปันเป้าหมายและสิ่งที่คุณจะพัฒนาตนเองในการเรียนหรือการทำงานในอนาคต',
+                  placeholder: 'สิ่งที่จะนำไปใช้คือ...'
+                },
+              ].map((q) => (
+                <div key={q.id} className="space-y-3">
+                  <label className="block">
+                    <span className="text-base font-bold text-slate-800">{q.title} <span className="text-rose-500">*</span></span>
+                    <span className="block font-medium text-slate-500 text-xs mt-1.5">{q.desc}</span>
+                  </label>
+                  <div className="relative group/textarea">
+                    <textarea
+                      name={q.id}
+                      value={formData[q.id]}
+                      onChange={handleChange}
+                      placeholder={q.placeholder}
+                      rows={4}
+                      maxLength={1000}
+                      className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-4 focus:ring-teal-500/15 focus:border-teal-500 transition-all duration-300 resize-none shadow-sm text-slate-700 placeholder:text-slate-400"
+                    ></textarea>
+                    
+                    {/* Character Counter */}
+                    <div className="absolute bottom-3 right-4 text-xs font-medium bg-white/80 backdrop-blur px-2 py-1 rounded-md text-slate-400 border border-slate-100 shadow-sm transition-opacity opacity-70 group-hover/textarea:opacity-100">
+                      <span className={formData[q.id].length > 900 ? 'text-amber-500' : ''}>
+                        {formData[q.id].length}
+                      </span> / 1,000
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Question 2 */}
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-800 block">
-                  ๒. คุณพบความท้าทายอะไร และรับมือกับสิ่งนั้นอย่างไร *
-                  <span className="block font-normal text-gray-500 text-xs mt-1">อาจเป็นเรื่องการเรียน การทำงานร่วมกับผู้อื่น หรือการจัดการเวลา</span>
-                </label>
-                <div className="relative">
-                  <textarea
-                    name="q2"
-                    value={formData.q2}
-                    onChange={handleChange}
-                    placeholder="ความท้าทายที่ค้นพบ และวิธีที่รับมือคือ..."
-                    rows={4}
-                    maxLength={1000}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1C5F4A]/20 focus:border-[#1C5F4A] transition-all resize-none"
-                  ></textarea>
-                  <div className="absolute bottom-3 right-3 text-xs text-gray-400">
-                    {formData.q2.length} / 1,000 ตัวอักษร
-                  </div>
-                </div>
-              </div>
-
-              {/* Question 3 */}
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-800 block">
-                  ๓. คุณจะนำสิ่งที่ได้เรียนรู้ไปใช้อย่างไร *
-                  <span className="block font-normal text-gray-500 text-xs mt-1">แบ่งปันเป้าหมายและสิ่งที่คุณจะพัฒนาตนเองในการเรียนหรือการทำงานในอนาคต</span>
-                </label>
-                <div className="relative">
-                  <textarea
-                    name="q3"
-                    value={formData.q3}
-                    onChange={handleChange}
-                    placeholder="สิ่งที่จะนำไปใช้คือ..."
-                    rows={4}
-                    maxLength={1000}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1C5F4A]/20 focus:border-[#1C5F4A] transition-all resize-none"
-                  ></textarea>
-                  <div className="absolute bottom-3 right-3 text-xs text-gray-400">
-                    {formData.q3.length} / 1,000 ตัวอักษร
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
-          {/* Form Actions */}
-          <div className="flex justify-between items-center pt-2 pb-10">
-            <div className="flex items-center gap-2 text-[#1C5F4A]">
-              <CheckCircle2 size={20} />
+          {/* Form Actions (3D Button Effect) */}
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-6 pt-4 pb-8">
+            <div className="flex items-center gap-3 text-emerald-700 bg-emerald-50 px-5 py-3 rounded-2xl border border-emerald-100 shadow-sm">
+              <CheckCircle2 size={24} className="text-emerald-500 drop-shadow-sm" />
               <div>
-                <p className="text-sm font-bold">ตรวจสอบข้อมูลและคำตอบก่อนส่ง</p>
-                <p className="text-xs text-gray-500 font-normal">โปรดตอบคำถามให้ครบทุกข้อ</p>
+                <p className="text-sm font-bold">ตรวจสอบข้อมูลให้ถูกต้อง</p>
+                <p className="text-xs text-emerald-600/80 font-medium">โปรดตอบคำถามให้ครบทุกข้อก่อนกดยืนยัน</p>
               </div>
             </div>
+            
             <button
               type="button"
-              className="bg-[#2B7A5F] hover:bg-[#1C5F4A] text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm"
+              className="w-full sm:w-auto relative group overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 px-8 py-4 font-bold text-white shadow-[0_8px_20px_rgba(16,185,129,0.3)] transition-all duration-300 hover:shadow-[0_10px_25px_rgba(16,185,129,0.4)] hover:-translate-y-1 active:translate-y-0"
             >
-              ส่งคำตอบ
-              <ArrowRight size={18} />
+              <div className="relative z-10 flex items-center justify-center gap-2">
+                <span className="tracking-wide">ส่งคำตอบ</span>
+                <ArrowRight size={18} className="group-hover:translate-x-1.5 transition-transform duration-300" />
+              </div>
+              {/* Shine effect on hover */}
+              <div className="absolute inset-0 h-full w-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
             </button>
           </div>
         </form>
       </main>
 
       {/* Footer */}
-      <footer className="border-t bg-white py-6 mt-auto">
-        <div className="max-w-4xl mx-auto px-4 flex justify-between items-center text-xs text-gray-400">
-          <p>งานพัฒนานักศึกษา</p>
+      <footer className="bg-white/80 backdrop-blur-md border-t border-slate-200 py-6 mt-auto relative z-10">
+        <div className="max-w-4xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-2 text-xs font-medium text-slate-400">
+          <p className="flex items-center gap-2">
+            <BookOpen size={14} /> งานพัฒนานักศึกษา
+          </p>
           <p>สงวนลิขสิทธิ์ © ระบบบันทึกการเรียนรู้</p>
         </div>
       </footer>
+
+      {/* Styles for the button shimmer effect */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes shimmer {
+          100% { transform: translateX(100%); }
+        }
+      `}} />
     </div>
   );
 }
