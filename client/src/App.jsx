@@ -4,6 +4,7 @@ import "./App.css";
 // pages
 import Home from "./page/home";
 import Question from "./page/question";
+import Dashboard from "./page/dashboard";
 
 function App() {
   return (
@@ -11,6 +12,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/question" element={<Question />} />
+        <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
     </BrowserRouter>
   );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Asides from '../components/asides';
 import {
   BookOpen,
   LayoutGrid,
@@ -363,44 +364,7 @@ const QuestionSettingPage = () => {
       )}
 
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col z-10">
-        <div className="p-6">
-          <div className="flex items-center gap-3 text-emerald-800 mb-1">
-            <BookOpen size={24} className="text-emerald-700" />
-            <span className="font-bold text-lg">พื้นที่การเรียนรู้</span>
-          </div>
-          <p className="text-xs text-gray-500 ml-9">งานพัฒนานักศึกษา</p>
-        </div>
-
-        <div className="px-6 pb-4">
-          <span className="inline-flex items-center px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded font-medium">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></div>
-            สำหรับผู้ดูแลระบบ
-          </span>
-        </div>
-
-        <div className="px-4 py-2">
-          <p className="px-4 text-xs font-semibold text-gray-400 mb-2">
-            พื้นที่ทำงาน
-          </p>
-          <nav className="space-y-1">
-            <a
-              href="#"
-              className="flex items-center gap-3 px-4 py-2.5 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-            >
-              <LayoutGrid size={18} />
-              <span className="text-sm">ภาพรวมและตรวจคำตอบ</span>
-            </a>
-            <a
-              href="#"
-              className="flex items-center gap-3 px-4 py-2.5 bg-emerald-50 text-emerald-700 rounded-lg transition-colors"
-            >
-              <ListChecks size={18} />
-              <span className="text-sm font-medium">ตั้งค่าคำถาม</span>
-            </a>
-          </nav>
-        </div>
-      </aside>
+      <Asides />
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
