@@ -1,9 +1,22 @@
 import React from 'react';
-import { BookOpen, LayoutGrid, Settings, HelpCircle } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom'; 
+import { BookOpen, LayoutGrid, Settings, HelpCircle, LogOut } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAdminAuth } from '../auth';
 
 export default function Sidebar({ isSidebarOpen }) {
   const location = useLocation(); // ดึง path ปัจจุบัน (เช่น '/dashboard' หรือ '/question')
+  const navigate = useNavigate();
+  const { user, logout } = useAdminAuth();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {
+      // The local auth state is cleared even if the session already expired.
+    } finally {
+      navigate('/admin/login', { replace: true });
+    }
+  };
 
   return (
     <aside
@@ -66,6 +79,15 @@ export default function Sidebar({ isSidebarOpen }) {
 
       {/* Sidebar Footer */}
       <div className="pt-4 border-t border-slate-100 space-y-3">
+        <div className="px-1 text-xs text-slate-500">เข้าสู่ระบบ: {user?.username}</div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-slate-600 hover:bg-red-50 hover:text-red-700"
+        >
+          <LogOut className="h-4 w-4" />
+          ออกจากระบบ
+        </button>
         <Link
           to="/manual" // สมมติว่ามีหน้าคู่มือ
           className="flex items-center space-x-2 text-xs text-slate-500 hover:text-slate-800 px-1"

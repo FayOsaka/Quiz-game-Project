@@ -111,10 +111,15 @@ export default function Home() {
             <p className="text-[11px] font-medium text-emerald-600 uppercase tracking-wider">งานพัฒนานักศึกษา</p>
           </div>
         </div>
-        <button className="hidden md:flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-900 bg-white border border-slate-200 px-4 py-2 rounded-full shadow-sm hover:shadow-md transition-all">
-          <Eye size={16} />
-          แบบฟอร์มสำหรับนักศึกษา
-        </button>
+        <div className="flex items-center gap-2">
+          <button className="hidden md:flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-900 bg-white border border-slate-200 px-4 py-2 rounded-full shadow-sm hover:shadow-md transition-all">
+            <Eye size={16} />
+            แบบฟอร์มสำหรับนักศึกษา
+          </button>
+          <a href="/admin/login" className="text-sm font-medium text-emerald-800 hover:text-emerald-950 px-3 py-2 rounded-full hover:bg-emerald-50">
+            ผู้ดูแลระบบ
+          </a>
+        </div>
       </header>
 
       {/* Main Content */}

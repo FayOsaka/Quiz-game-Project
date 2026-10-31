@@ -2,17 +2,26 @@ import { createServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { ensureAuthSchema, randomToken, sha256, verifyPassword } from './auth.js';
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = process.env.QUESTION_DB_PATH || path.join(directory, 'question.db');
 const port = Number(process.env.API_PORT || 8000);
 const allowedOrigins = new Set([
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
+  ...(process.env.NODE_ENV === 'production' ? [] : ['http://localhost:5173', 'http://127.0.0.1:5173']),
   ...(process.env.CORS_ALLOWED_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
 ]);
 const db = new DatabaseSync(dbPath);
 db.exec('PRAGMA foreign_keys = ON');
+ensureAuthSchema(db);
+
+const SESSION_IDLE_MS = 30 * 60 * 1000;
+const SESSION_ABSOLUTE_MS = 12 * 60 * 60 * 1000;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_FAILURES = 5;
+const SESSION_COOKIE = 'quiz_admin_session';
+const DUMMY_PASSWORD_HASH = Buffer.alloc(64);
+const DUMMY_PASSWORD_SALT = Buffer.alloc(16);
 
 // Preserve the existing database schema and add the answer variants table used by the editor.
 db.exec(`
@@ -172,19 +181,110 @@ function readPublicQuestionSets() {
     }));
 }
 
-function send(res, status, value, origin) {
+function send(res, status, value, origin, extraHeaders = {}) {
   const body = value === undefined ? '' : JSON.stringify(value);
   const headers = {
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    ...extraHeaders,
   };
   if (origin && allowedOrigins.has(origin)) {
     headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Credentials'] = 'true';
+    headers['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRF-Token';
+    headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
     headers.Vary = 'Origin';
   }
   res.writeHead(status, headers);
   res.end(body);
+}
+
+function readCookie(req, name) {
+  const cookieHeader = req.headers.cookie || '';
+  for (const segment of cookieHeader.split(';')) {
+    const separator = segment.indexOf('=');
+    if (separator < 0) continue;
+    if (segment.slice(0, separator).trim() === name) return decodeURIComponent(segment.slice(separator + 1).trim());
+  }
+  return '';
+}
+
+function secureCookie(req) {
+  return Boolean(req.socket.encrypted) || process.env.COOKIE_SECURE === 'true';
+}
+
+function makeSessionCookie(token, req, maxAgeSeconds) {
+  const secure = secureCookie(req) ? '; Secure' : '';
+  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure}`;
+}
+
+function clearSessionCookie(req) {
+  const secure = secureCookie(req) ? '; Secure' : '';
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+}
+
+function clientIp(req) {
+  if (process.env.TRUST_CLOUDFLARE_PROXY === 'true') {
+    const cloudflareIp = req.headers['cf-connecting-ip'];
+    if (typeof cloudflareIp === 'string' && cloudflareIp.length <= 64) return cloudflareIp;
+  }
+  return req.socket.remoteAddress || 'unknown';
+}
+
+function authenticateAdmin(req) {
+  const rawToken = readCookie(req, SESSION_COOKIE);
+  if (!rawToken) return null;
+  let tokenBytes;
+  try {
+    tokenBytes = Buffer.from(rawToken, 'base64url');
+  } catch {
+    return null;
+  }
+  if (tokenBytes.length !== 32) return null;
+  const now = Date.now();
+  const session = db.prepare(`
+    SELECT s.id AS session_id, s.csrf_token_hash, s.last_seen_at, s.expires_at,
+      s.absolute_expires_at, u.id AS admin_user_id, u.username
+    FROM admin_sessions s JOIN admin_users u ON u.id = s.admin_user_id
+    WHERE s.token_hash = ? AND s.revoked_at IS NULL AND u.is_active = 1
+  `).get(sha256(tokenBytes));
+  if (!session) return null;
+  if (session.expires_at <= now || session.absolute_expires_at <= now || session.last_seen_at + SESSION_IDLE_MS <= now) {
+    db.prepare('UPDATE admin_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL').run(now, session.session_id);
+    return null;
+  }
+  const nextExpiry = Math.min(now + SESSION_IDLE_MS, session.absolute_expires_at);
+  db.prepare('UPDATE admin_sessions SET last_seen_at = ?, expires_at = ? WHERE id = ?')
+    .run(now, nextExpiry, session.session_id);
+  return { ...session, tokenBytes, expiresAt: nextExpiry };
+}
+
+function adminAccess(req) {
+  const session = authenticateAdmin(req);
+  if (!session) return { error: { status: 401, message: 'Admin login required' } };
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    const origin = req.headers.origin;
+    if (!origin || !allowedOrigins.has(origin)) {
+      return { error: { status: 403, message: 'Request Origin is not allowed' } };
+    }
+    const supplied = req.headers['x-csrf-token'];
+    if (typeof supplied !== 'string' || !supplied) {
+      return { error: { status: 403, message: 'CSRF token required' } };
+    }
+    const tokenHash = sha256(supplied);
+    const validToken = db.prepare(`
+      SELECT 1 FROM admin_session_csrf_tokens WHERE session_id = ? AND token_hash = ?
+    `).get(session.session_id, tokenHash);
+    if (!validToken) {
+      return { error: { status: 403, message: 'Invalid CSRF token' } };
+    }
+  }
+  return { session };
+}
+
+function originAllowed(req) {
+  const origin = req.headers.origin;
+  return typeof origin === 'string' && allowedOrigins.has(origin);
 }
 
 async function readBody(req) {
@@ -211,7 +311,21 @@ async function readBody(req) {
 }
 
 const server = createServer(async (req, res) => {
-  const reply = (status, value) => send(res, status, value, req.headers.origin);
+  let sessionRenewalCookie = null;
+  const reply = (status, value, headers = {}) => send(res, status, value, req.headers.origin, {
+    ...(sessionRenewalCookie ? { 'Set-Cookie': sessionRenewalCookie } : {}),
+    ...headers,
+  });
+  const checkAdmin = () => {
+    const access = adminAccess(req);
+    if (access.session) {
+      const maxAge = Math.max(0, Math.floor((access.session.expiresAt - Date.now()) / 1000));
+      sessionRenewalCookie = makeSessionCookie(access.session.tokenBytes.toString('base64url'), req, maxAge);
+    } else {
+      sessionRenewalCookie = clearSessionCookie(req);
+    }
+    return access;
+  };
   if (req.method === 'OPTIONS') return reply(204);
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const parts = url.pathname.split('/').filter(Boolean);
@@ -220,9 +334,11 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/') {
       return reply(200, {
         name: 'Quiz Game Question API',
-        database: dbPath,
         endpoints: [
           'GET /api/health',
+          'POST /api/auth/login',
+          'GET /api/auth/session',
+          'POST /api/auth/logout',
           'GET /api/public/question-sets',
           'GET /api/question-sets',
           'GET /api/dashboard?question_set_id=:id',
@@ -236,10 +352,135 @@ const server = createServer(async (req, res) => {
       });
     }
     if (req.method === 'GET' && url.pathname === '/api/health') {
-      return reply(200, { status: 'ok', database: dbPath });
+      return reply(200, { status: 'ok' });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/auth/login') {
+      if (!originAllowed(req)) return reply(403, { error: 'Request Origin is not allowed' });
+      const data = await readBody(req);
+      if (typeof data.username !== 'string' || typeof data.password !== 'string'
+        || data.username.trim().length < 3 || data.username.trim().length > 100
+        || data.password.length < 1 || data.password.length > 1024) {
+        return reply(400, { error: 'Username and password are required' });
+      }
+      const username = data.username.trim();
+      const now = Date.now();
+      const accountHash = sha256(username.toLocaleLowerCase());
+      const ipHash = sha256(clientIp(req));
+      const saveLoginAttempt = db.prepare(`
+        INSERT INTO admin_login_attempts(account_key_hash, ip_key_hash, attempted_at, succeeded)
+        VALUES (?, ?, ?, 0)
+      `);
+      let loginAttempt;
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        db.prepare('DELETE FROM admin_login_attempts WHERE attempted_at < ?').run(now - 30 * 24 * 60 * 60 * 1000);
+        const recentFailures = db.prepare(`
+          SELECT COUNT(*) AS count FROM admin_login_attempts
+          WHERE attempted_at >= ? AND succeeded = 0
+            AND (account_key_hash = ? OR ip_key_hash = ?)
+        `).get(now - LOGIN_WINDOW_MS, accountHash, ipHash).count;
+        if (recentFailures >= LOGIN_MAX_FAILURES) {
+          db.exec('ROLLBACK');
+          return reply(429, { error: 'Too many login attempts. Try again in 15 minutes.' }, { 'Retry-After': '900' });
+        }
+        loginAttempt = saveLoginAttempt.run(accountHash, ipHash, now);
+        db.exec('COMMIT');
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+
+      const admin = db.prepare(`
+        SELECT id, username, password_hash, password_salt, scrypt_n, scrypt_r, scrypt_p
+        FROM admin_users WHERE username = ? COLLATE NOCASE AND is_active = 1
+      `).get(username);
+      const passwordOk = await verifyPassword(
+        data.password,
+        admin ? Buffer.from(admin.password_salt) : DUMMY_PASSWORD_SALT,
+        admin ? Buffer.from(admin.password_hash) : DUMMY_PASSWORD_HASH,
+        admin
+          ? { keyLength: 64, N: admin.scrypt_n, r: admin.scrypt_r, p: admin.scrypt_p }
+          : { keyLength: 64, N: 32768, r: 8, p: 1 },
+      );
+      const succeeded = Boolean(admin && passwordOk);
+      if (!succeeded) return reply(401, { error: 'Invalid username or password' });
+
+      const rawSessionToken = randomToken();
+      const rawCsrfToken = randomToken();
+      const absoluteExpiry = now + SESSION_ABSOLUTE_MS;
+      const idleExpiry = Math.min(now + SESSION_IDLE_MS, absoluteExpiry);
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        db.prepare('UPDATE admin_login_attempts SET succeeded = 1 WHERE id = ? AND succeeded = 0')
+          .run(loginAttempt.lastInsertRowid);
+        const sessionResult = db.prepare(`
+          INSERT INTO admin_sessions
+            (admin_user_id, token_hash, csrf_token_hash, created_at, last_seen_at, expires_at, absolute_expires_at, user_agent)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(admin.id, sha256(Buffer.from(rawSessionToken, 'base64url')), sha256(rawCsrfToken),
+          now, now, idleExpiry, absoluteExpiry, String(req.headers['user-agent'] || '').slice(0, 500) || null);
+        db.prepare(`
+          INSERT INTO admin_session_csrf_tokens(session_id, token_hash, created_at)
+          VALUES (?, ?, ?)
+        `).run(sessionResult.lastInsertRowid, sha256(rawCsrfToken), now);
+        db.prepare('UPDATE admin_users SET last_login_at = ?, updated_at = ? WHERE id = ?').run(now, now, admin.id);
+        db.exec('COMMIT');
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+      return reply(200, {
+        user: { id: admin.id, username: admin.username },
+        csrfToken: rawCsrfToken,
+        expiresAt: idleExpiry,
+      }, { 'Set-Cookie': makeSessionCookie(rawSessionToken, req, Math.floor(SESSION_IDLE_MS / 1000)) });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/auth/session') {
+      if (req.headers.origin && !originAllowed(req)) return reply(403, { error: 'Request Origin is not allowed' });
+      const session = authenticateAdmin(req);
+      if (!session) return reply(401, { error: 'Admin login required' }, { 'Set-Cookie': clearSessionCookie(req) });
+      sessionRenewalCookie = makeSessionCookie(
+        session.tokenBytes.toString('base64url'), req,
+        Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000)),
+      );
+      const csrfToken = randomToken();
+      const csrfHash = sha256(csrfToken);
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        db.prepare('UPDATE admin_sessions SET csrf_token_hash = ? WHERE id = ? AND revoked_at IS NULL')
+          .run(csrfHash, session.session_id);
+        db.prepare(`
+          INSERT INTO admin_session_csrf_tokens(session_id, token_hash, created_at)
+          VALUES (?, ?, ?)
+        `).run(session.session_id, csrfHash, Date.now());
+        db.exec('COMMIT');
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+      return reply(200, {
+        user: { id: session.admin_user_id, username: session.username },
+        csrfToken,
+        expiresAt: session.expiresAt,
+      });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/auth/logout') {
+      const access = checkAdmin();
+      if (access.error) return reply(access.error.status, { error: access.error.message });
+      db.prepare('UPDATE admin_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL')
+        .run(Date.now(), access.session.session_id);
+      return reply(200, { ok: true }, { 'Set-Cookie': clearSessionCookie(req) });
     }
     if (req.method === 'GET' && url.pathname === '/api/public/question-sets') {
       return reply(200, readPublicQuestionSets());
+    }
+    const isAdminApi = url.pathname === '/api/question-sets'
+      || url.pathname === '/api/dashboard'
+      || /^\/api\/students\/[^/]+\/pin$/u.test(url.pathname)
+      || /^\/api\/question-sets\/\d+(?:\/questions)?$/u.test(url.pathname);
+    if (isAdminApi) {
+      const access = checkAdmin();
+      if (access.error) return reply(access.error.status, { error: access.error.message });
     }
     if (req.method === 'GET' && url.pathname === '/api/question-sets') {
       const ids = db.prepare('SELECT id FROM question_sets ORDER BY id DESC').all();
