@@ -1,257 +1,79 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Asides from '../components/asides';
+import { dashboardApi } from '../api';
 import {
-  BookOpen,
-  LayoutGrid,
-  Settings,
-  HelpCircle,
   Bell,
   ChevronDown,
   Download,
   Users,
   CheckCircle2,
-  XCircle,
   Search,
   Filter,
   ChevronLeft,
   ChevronRight,
   Check,
   X,
+  Pin,
   FileCheck,
-  Menu,
   UserCheck,
   Building2,
   FlaskConical,
   GraduationCap
 } from 'lucide-react';
 
-// Mock Student Data
-const initialStudents = [
-  {
-    id: '690100101',
-    name: 'กานต์พิชชา วัฒนกุล',
-    degree: 'วท.บ. วิทยาการคอมพิวเตอร์',
-    faculty: 'คณะวิทยาศาสตร์',
-    time: '10:42 น.',
-    date: '28 ต.ค. 69',
-    status: 'ตรวจ 3/3 ข้อ',
-    campus: 'ในมหาวิทยาลัย',
-    answers: [
-      {
-        id: 1,
-        question: '1. รหัสผ่านที่ปลอดภัยควรมีลักษณะอย่างไร?',
-        isCorrect: true,
-        userAnswer: 'อย่างน้อย 12 ตัว ผสมอักขระหลายประเภท',
-        refAnswer: 'เฉลยในฐานข้อมูล: อย่างน้อย 12 ตัว ผสมอักขระหลายประเภท'
-      },
-      {
-        id: 2,
-        question: '2. หากได้รับลิงก์น่าสงสัย ควรทำสิ่งใดก่อน?',
-        isCorrect: false,
-        userAnswer: 'เปิดลิงก์ทันทีเพื่อดูว่าเป็นข้อมูลสำคัญหรือไม่',
-        refAnswer: 'เฉลยในฐานข้อมูล: ไม่คลิกลิงก์ และตรวจสอบผู้ส่งก่อน'
-      },
-      {
-        id: 3,
-        question: '3. การยืนยันตัวตนสองขั้นตอนคืออะไร?',
-        isCorrect: true,
-        userAnswer: 'รหัสผ่านร่วมกับรหัสยืนยันอื่น',
-        refAnswer: 'เฉลยในฐานข้อมูล: รหัสผ่านร่วมกับรหัสยืนยันอื่น'
-      }
-    ]
-  },
-  {
-    id: '690100102',
-    name: 'ธนกร ศรีสุข',
-    degree: 'บธ.บ. การจัดการ',
-    faculty: 'คณะบริหารธุรกิจ',
-    time: '10:38 น.',
-    date: '28 ต.ค. 69',
-    status: 'ตรวจ 3/3 ข้อ',
-    campus: 'ศูนย์วิทยาศาสตร์',
-    answers: [
-      {
-        id: 1,
-        question: '1. รหัสผ่านที่ปลอดภัยควรมีลักษณะอย่างไร?',
-        isCorrect: true,
-        userAnswer: 'อย่างน้อย 12 ตัว ผสมอักขระหลายประเภท',
-        refAnswer: 'เฉลยในฐานข้อมูล: อย่างน้อย 12 ตัว ผสมอักขระหลายประเภท'
-      },
-      {
-        id: 2,
-        question: '2. หากได้รับลิงก์น่าสงสัย ควรทำสิ่งใดก่อน?',
-        isCorrect: true,
-        userAnswer: 'ไม่คลิกลิงก์ และตรวจสอบผู้ส่งก่อน',
-        refAnswer: 'เฉลยในฐานข้อมูล: ไม่คลิกลิงก์ และตรวจสอบผู้ส่งก่อน'
-      },
-      {
-        id: 3,
-        question: '3. การยืนยันตัวตนสองขั้นตอนคืออะไร?',
-        isCorrect: true,
-        userAnswer: 'รหัสผ่านร่วมกับรหัสยืนยันอื่น',
-        refAnswer: 'เฉลยในฐานข้อมูล: รหัสผ่านร่วมกับรหัสยืนยันอื่น'
-      }
-    ]
-  },
-  {
-    id: '690100103',
-    name: 'ณัฐธิดา พงษ์เจริญ',
-    degree: 'วท.บ. วิทยาการคอมพิวเตอร์',
-    faculty: 'คณะวิทยาศาสตร์',
-    time: '10:31 น.',
-    date: '28 ต.ค. 69',
-    status: 'ตรวจ 3/3 ข้อ',
-    campus: 'วิทยาเขตสุพรรณบุรี',
-    answers: [
-      {
-        id: 1,
-        question: '1. รหัสผ่านที่ปลอดภัยควรมีลักษณะอย่างไร?',
-        isCorrect: true,
-        userAnswer: 'อย่างน้อย 12 ตัว ผสมอักขระหลายประเภท',
-        refAnswer: 'เฉลยในฐานข้อมูล: อย่างน้อย 12 ตัว ผสมอักขระหลายประเภท'
-      },
-      {
-        id: 2,
-        question: '2. หากได้รับลิงก์น่าสงสัย ควรทำสิ่งใดก่อน?',
-        isCorrect: true,
-        userAnswer: 'ไม่คลิกลิงก์ และตรวจสอบผู้ส่งก่อน',
-        refAnswer: 'เฉลยในฐานข้อมูล: ไม่คลิกลิงก์ และตรวจสอบผู้ส่งก่อน'
-      },
-      {
-        id: 3,
-        question: '3. การยืนยันตัวตนสองขั้นตอนคืออะไร?',
-        isCorrect: false,
-        userAnswer: 'การใส่รหัสผ่านเพียงอย่างเดียว',
-        refAnswer: 'เฉลยในฐานข้อมูล: รหัสผ่านร่วมกับรหัสยืนยันอื่น'
-      }
-    ]
-  },
-  {
-    id: '690100104',
-    name: 'ปิยวัฒน์ แสงทอง',
-    degree: 'วศ.บ. วิศวกรรมโยธา',
-    faculty: 'คณะวิศวกรรมศาสตร์',
-    time: '10:24 น.',
-    date: '28 ต.ค. 69',
-    status: 'ตรวจ 3/3 ข้อ',
-    campus: 'ในมหาวิทยาลัย',
-    answers: [
-      {
-        id: 1,
-        question: '1. รหัสผ่านที่ปลอดภัยควรมีลักษณะอย่างไร?',
-        isCorrect: true,
-        userAnswer: 'อย่างน้อย 12 ตัว ผสมอักขระหลายประเภท',
-        refAnswer: 'เฉลยในฐานข้อมูล: อย่างน้อย 12 ตัว ผสมอักขระหลายประเภท'
-      },
-      {
-        id: 2,
-        question: '2. หากได้รับลิงก์น่าสงสัย ควรทำสิ่งใดก่อน?',
-        isCorrect: true,
-        userAnswer: 'ไม่คลิกลิงก์ และตรวจสอบผู้ส่งก่อน',
-        refAnswer: 'เฉลยในฐานข้อมูล: ไม่คลิกลิงก์ และตรวจสอบผู้ส่งก่อน'
-      },
-      {
-        id: 3,
-        question: '3. การยืนยันตัวตนสองขั้นตอนคืออะไร?',
-        isCorrect: true,
-        userAnswer: 'รหัสผ่านร่วมกับรหัสยืนยันอื่น',
-        refAnswer: 'เฉลยในฐานข้อมูล: รหัสผ่านร่วมกับรหัสยืนยันอื่น'
-      }
-    ]
-  },
-  {
-    id: '690100105',
-    name: 'ชญาณิศ ใจมั่น',
-    degree: 'บธ.บ. การบัญชี',
-    faculty: 'คณะบริหารธุรกิจ',
-    time: '10:16 น.',
-    date: '28 ต.ค. 69',
-    status: 'ตรวจ 3/3 ข้อ',
-    campus: 'ศูนย์วิทยาศาสตร์',
-    answers: [
-      {
-        id: 1,
-        question: '1. รหัสผ่านที่ปลอดภัยควรมีลักษณะอย่างไร?',
-        isCorrect: true,
-        userAnswer: 'อย่างน้อย 12 ตัว ผสมอักขระหลายประเภท',
-        refAnswer: 'เฉลยในฐานข้อมูล: อย่างน้อย 12 ตัว ผสมอักขระหลายประเภท'
-      },
-      {
-        id: 2,
-        question: '2. หากได้รับลิงก์น่าสงสัย ควรทำสิ่งใดก่อน?',
-        isCorrect: false,
-        userAnswer: 'เปิดดูในแท็บส่วนตัว',
-        refAnswer: 'เฉลยในฐานข้อมูล: ไม่คลิกลิงก์ และตรวจสอบผู้ส่งก่อน'
-      },
-      {
-        id: 3,
-        question: '3. การยืนยันตัวตนสองขั้นตอนคืออะไร?',
-        isCorrect: true,
-        userAnswer: 'รหัสผ่านร่วมกับรหัสยืนยันอื่น',
-        refAnswer: 'เฉลยในฐานข้อมูล: รหัสผ่านร่วมกับรหัสยืนยันอื่น'
-      }
-    ]
-  },
-  {
-    id: '690100106',
-    name: 'ศุภกร มีทรัพย์',
-    degree: 'วศ.บ. วิศวกรรมไฟฟ้า',
-    faculty: 'คณะวิศวกรรมศาสตร์',
-    time: '10:05 น.',
-    date: '28 ต.ค. 69',
-    status: 'ตรวจ 3/3 ข้อ',
-    campus: 'วิทยาเขตสุพรรณบุรี',
-    answers: [
-      {
-        id: 1,
-        question: '1. รหัสผ่านที่ปลอดภัยควรมีลักษณะอย่างไร?',
-        isCorrect: true,
-        userAnswer: 'อย่างน้อย 12 ตัว ผสมอักขระหลายประเภท',
-        refAnswer: 'เฉลยในฐานข้อมูล: อย่างน้อย 12 ตัว ผสมอักขระหลายประเภท'
-      },
-      {
-        id: 2,
-        question: '2. หากได้รับลิงก์น่าสงสัย ควรทำสิ่งใดก่อน?',
-        isCorrect: true,
-        userAnswer: 'ไม่คลิกลิงก์ และตรวจสอบผู้ส่งก่อน',
-        refAnswer: 'เฉลยในฐานข้อมูล: ไม่คลิกลิงก์ และตรวจสอบผู้ส่งก่อน'
-      },
-      {
-        id: 3,
-        question: '3. การยืนยันตัวตนสองขั้นตอนคืออะไร?',
-        isCorrect: true,
-        userAnswer: 'รหัสผ่านร่วมกับรหัสยืนยันอื่น',
-        refAnswer: 'เฉลยในฐานข้อมูล: รหัสผ่านร่วมกับรหัสยืนยันอื่น'
-      }
-    ]
-  }
-];
-
 export default function App() {
-  const [studentsList] = useState(initialStudents);
-  const [selectedStudent, setSelectedStudent] = useState(initialStudents[0]);
+  const [studentsList, setStudentsList] = useState([]);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [questionSets, setQuestionSets] = useState([]);
+  const [selectedSetId, setSelectedSetId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [courseFilter, setCourseFilter] = useState('ความปลอดภัยดิจิทัล');
+  const [selectedCampus, setSelectedCampus] = useState('');
+  const [responseSort, setResponseSort] = useState('all');
+  const [pinnedOnly, setPinnedOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [notification, setNotification] = useState('');
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
+  useEffect(() => {
+    let ignore = false;
+    dashboardApi.getData(selectedSetId)
+      .then((data) => {
+        if (ignore) return;
+        setQuestionSets(data.questionSets);
+        setStudentsList(data.submissions);
+        setSelectedStudent((current) => data.submissions.find((item) => item.submissionId === current?.submissionId) || data.submissions[0] || null);
+        setApiError('');
+      })
+      .catch((error) => { if (!ignore) setApiError(error.message); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
+  }, [selectedSetId]);
+
+  const uniqueStudents = useMemo(() => {
+    const byCode = new Map();
+    studentsList.forEach((submission) => {
+      if (!byCode.has(submission.id)) byCode.set(submission.id, submission);
+    });
+    return [...byCode.values()];
+  }, [studentsList]);
+
   // คำนวณจำนวนนักศึกษาแยกตามสถานที่จากข้อมูลจริง
   const campusCount = useMemo(() => {
-    return studentsList.filter((s) => s.campus === 'ในมหาวิทยาลัย').length;
-  }, [studentsList]);
+    return uniqueStudents.filter((s) => s.campus === 'ในมหาวิทยาลัย').length;
+  }, [uniqueStudents]);
 
   const scienceCount = useMemo(() => {
-    return studentsList.filter((s) => s.campus === 'ศูนย์วิทยาศาสตร์').length;
-  }, [studentsList]);
+    return uniqueStudents.filter((s) => s.campus === 'ศูนย์วิทยาศาสตร์').length;
+  }, [uniqueStudents]);
 
   const suphanCount = useMemo(() => {
-    return studentsList.filter((s) => s.campus === 'วิทยาเขตสุพรรณบุรี').length;
-  }, [studentsList]);
+    return uniqueStudents.filter((s) => s.campus === 'วิทยาเขตสุพรรณบุรี').length;
+  }, [uniqueStudents]);
 
   // ช่องที่ 4: รวมจำนวนนักศึกษาจากทั้ง 3 ช่องอัตโนมัติ
-  const totalStudentsCount = campusCount + scienceCount + suphanCount;
+  const totalStudentsCount = uniqueStudents.length;
 
   // คำนวณคำตอบทั้งหมด คำตอบที่ถูก และผิด จากคำตอบของนักศึกษาจริง
   const answerStats = useMemo(() => {
@@ -273,47 +95,79 @@ export default function App() {
     return { total, correct, wrong, correctPercent, wrongPercent };
   }, [studentsList]);
 
-  // ข้อมูลแจ้งเตือน Real-time ล่าสุด
-  const [notificationsList] = useState([
-    {
-      id: 1,
-      studentName: 'กานต์พิชชา วัฒนกุล',
-      location: 'ในมหาวิทยาลัย',
-      timeAgo: 'เมื่อสักครู่',
-      isRead: false
-    },
-    {
-      id: 2,
-      studentName: 'ธนกร ศรีสุข',
-      location: 'ศูนย์วิทยาศาสตร์',
-      timeAgo: '2 นาทีที่แล้ว',
-      isRead: false
-    },
-    {
-      id: 3,
-      studentName: 'ณัฐธิดา พงษ์เจริญ',
-      location: 'วิทยาเขตสุพรรณบุรี',
-      timeAgo: '5 นาทีที่แล้ว',
-      isRead: true
-    }
-  ]);
-
-  const unreadCount = notificationsList.filter((n) => !n.isRead).length;
+  const notificationsList = studentsList.slice(0, 5).map((student, index) => ({
+    id: student.submissionId,
+    studentName: student.name,
+    location: student.campus || 'ไม่ระบุวิทยาเขต',
+    timeAgo: index === 0 ? 'ล่าสุด' : student.time,
+    isRead: false,
+  }));
+  const unreadCount = notificationsList.length;
 
   // Filter students by search term
   const filteredStudents = useMemo(() => {
-    return studentsList.filter(
-      (s) =>
-        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.id.includes(searchQuery)
-    );
-  }, [studentsList, searchQuery]);
+    const query = searchQuery.toLowerCase();
+    const matches = studentsList.filter((student) => {
+      const matchesCampus = !selectedCampus || student.campus === selectedCampus;
+      const matchesSearch = student.name.toLowerCase().includes(query) || student.id.includes(searchQuery);
+      return matchesCampus && matchesSearch && (!pinnedOnly || student.isPinned);
+    });
+    const compareSpeed = (a, b) => {
+      if (a.durationSeconds != null && b.durationSeconds != null) return a.durationSeconds - b.durationSeconds;
+      if (a.durationSeconds != null) return -1;
+      if (b.durationSeconds != null) return 1;
+      return String(a.submittedAt).localeCompare(String(b.submittedAt));
+    };
+    if (responseSort === 'time') matches.sort(compareSpeed);
+    if (responseSort === 'correct') matches.sort((a, b) => b.score - a.score);
+    if (responseSort === 'combined') matches.sort((a, b) => (b.score - a.score) || compareSpeed(a, b));
+    return matches;
+  }, [studentsList, searchQuery, selectedCampus, responseSort, pinnedOnly]);
+
+  const filteredUniqueStudentCount = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    return uniqueStudents.filter((student) => {
+      const matchesCampus = !selectedCampus || student.campus === selectedCampus;
+      const matchesSearch = student.name.toLowerCase().includes(query) || student.id.includes(searchQuery);
+      return matchesCampus && matchesSearch && (!pinnedOnly || student.isPinned);
+    }).length;
+  }, [uniqueStudents, searchQuery, selectedCampus, pinnedOnly]);
+  const pinnedStudentCount = uniqueStudents.filter((student) => student.isPinned).length;
+
+  const displayedStudent = filteredStudents.find((student) => student.submissionId === selectedStudent?.submissionId)
+    || filteredStudents[0]
+    || null;
+
+  const togglePin = async (student) => {
+    const pinned = !student.isPinned;
+    try {
+      await dashboardApi.pinStudent(student.id, pinned);
+      setStudentsList((items) => items.map((item) => item.id === student.id ? { ...item, isPinned: pinned } : item));
+      setSelectedStudent((current) => current?.id === student.id ? { ...current, isPinned: pinned } : current);
+      setNotification(pinned ? 'ปักหมุดนักศึกษาแล้ว' : 'ยกเลิกปักหมุดแล้ว');
+      setTimeout(() => setNotification(''), 2500);
+    } catch (error) {
+      setNotification(error.message);
+      setTimeout(() => setNotification(''), 3500);
+    }
+  };
 
   const handleExport = () => {
-    setNotification('กำลังส่งออกข้อมูลเป็น CSV...');
-    setTimeout(() => {
-      setNotification('');
-    }, 3000);
+    if (!studentsList.length) return setNotification('ยังไม่มีข้อมูลสำหรับส่งออก');
+    const escapeCsv = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+    const rows = [['รหัสนักศึกษา', 'ชื่อ-นามสกุล', 'หลักสูตร', 'คณะ', 'วิทยาเขต', 'วันที่ส่ง', 'คะแนน']];
+    studentsList.forEach((student) => rows.push([
+      student.id, student.name, student.degree, student.faculty, student.campus,
+      student.submittedAt, `${student.score}/${student.totalQuestions}`,
+    ]));
+    const csv = `\uFEFF${rows.map((row) => row.map(escapeCsv).join(',')).join('\r\n')}`;
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    link.download = 'quiz-dashboard.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+    setNotification('ส่งออกข้อมูลเป็น CSV แล้ว');
+    setTimeout(() => setNotification(''), 3000);
   };
 
   return (
@@ -418,6 +272,8 @@ export default function App() {
 
         {/* DASHBOARD CONTAINER */}
         <main className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+          {apiError && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{apiError}</div>}
+          {loading && <div className="text-sm text-slate-500">กำลังโหลดข้อมูลจากฐานข้อมูล…</div>}
           
           {/* SECTION HEADER & CONTROL BAR */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -434,13 +290,12 @@ export default function App() {
               {/* Dropdown Selector */}
               <div className="relative">
                 <select
-                  value={courseFilter}
-                  onChange={(e) => setCourseFilter(e.target.value)}
+                  value={selectedSetId}
+                  onChange={(e) => { setLoading(true); setSelectedSetId(e.target.value); }}
                   className="appearance-none bg-white border border-slate-200 text-slate-700 text-xs md:text-sm rounded-lg pl-3 pr-8 py-2 font-medium hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-sm cursor-pointer"
                 >
-                  <option value="ความปลอดภัยดิจิทัล">ความปลอดภัยดิจิทัล</option>
-                  <option value="ทักษะดิจิทัลพื้นฐาน">ทักษะดิจิทัลพื้นฐาน</option>
-                  <option value="จริยธรรมไซเบอร์">จริยธรรมไซเบอร์</option>
+                  <option value="">ทุกชุดคำถาม</option>
+                  {questionSets.map((set) => <option key={set.id} value={String(set.id)}>{set.title}</option>)}
                 </select>
                 <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
@@ -459,7 +314,7 @@ export default function App() {
           {/* STATS CARDS ROW (4 CARDS) - ปรับไอคอนและหัวข้อตรงตามความหมาย */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Card 1: ในมหาวิทยาลัย */}
-            <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+            <button type="button" aria-pressed={selectedCampus === 'ในมหาวิทยาลัย'} onClick={() => setSelectedCampus((value) => value === 'ในมหาวิทยาลัย' ? '' : 'ในมหาวิทยาลัย')} className={`text-left bg-white rounded-xl p-5 border shadow-sm flex flex-col justify-between transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-500 ${selectedCampus === 'ในมหาวิทยาลัย' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200/80'}`}>
               <div className="flex justify-between items-start">
                 <span className="text-xs font-medium text-slate-500">ในมหาวิทยาลัย</span>
                 <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
@@ -471,10 +326,10 @@ export default function App() {
                   {campusCount} <span className="text-xs font-normal text-slate-500 ml-0.5">คน</span>
                 </div>
               </div>
-            </div>
+            </button>
 
             {/* Card 2: ศูนย์วิทยาศาสตร์ */}
-            <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+            <button type="button" aria-pressed={selectedCampus === 'ศูนย์วิทยาศาสตร์'} onClick={() => setSelectedCampus((value) => value === 'ศูนย์วิทยาศาสตร์' ? '' : 'ศูนย์วิทยาศาสตร์')} className={`text-left bg-white rounded-xl p-5 border shadow-sm flex flex-col justify-between transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-500 ${selectedCampus === 'ศูนย์วิทยาศาสตร์' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200/80'}`}>
               <div className="flex justify-between items-start">
                 <span className="text-xs font-medium text-slate-500">ศูนย์วิทยาศาสตร์</span>
                 <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
@@ -486,10 +341,10 @@ export default function App() {
                   {scienceCount} <span className="text-xs font-normal text-slate-500 ml-0.5">คน</span>
                 </div>
               </div>
-            </div>
+            </button>
 
             {/* Card 3: วิทยาเขตสุพรรณบุรี */}
-            <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+            <button type="button" aria-pressed={selectedCampus === 'วิทยาเขตสุพรรณบุรี'} onClick={() => setSelectedCampus((value) => value === 'วิทยาเขตสุพรรณบุรี' ? '' : 'วิทยาเขตสุพรรณบุรี')} className={`text-left bg-white rounded-xl p-5 border shadow-sm flex flex-col justify-between transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-500 ${selectedCampus === 'วิทยาเขตสุพรรณบุรี' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200/80'}`}>
               <div className="flex justify-between items-start">
                 <span className="text-xs font-medium text-slate-500">วิทยาเขตสุพรรณบุรี</span>
                 <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
@@ -501,10 +356,10 @@ export default function App() {
                   {suphanCount} <span className="text-xs font-normal text-slate-500 ml-0.5">คน</span>
                 </div>
               </div>
-            </div>
+            </button>
 
             {/* Card 4: จำนวนนักศึกษาทั้งหมด (ผลรวมจาก 3 ช่องแรก) */}
-            <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+            <button type="button" aria-pressed={!selectedCampus} onClick={() => setSelectedCampus('')} className={`text-left bg-white rounded-xl p-5 border shadow-sm flex flex-col justify-between transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-500 ${!selectedCampus ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200/80'}`}>
               <div className="flex justify-between items-start">
                 <span className="text-xs font-medium text-slate-500">จำนวนนักศึกษาทั้งหมด</span>
                 <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center text-blue-500">
@@ -516,7 +371,7 @@ export default function App() {
                   {totalStudentsCount} <span className="text-xs font-normal text-slate-500 ml-0.5">นักศึกษา</span>
                 </div>
               </div>
-            </div>
+            </button>
           </div>
 
           {/* MIDDLE ANALYTICS WIDGET: STATUS BAR (คำนวณตามจำนวนที่นักศึกษาตอบจริง) */}
@@ -527,8 +382,8 @@ export default function App() {
             </div>
 
             <div className="flex items-baseline space-x-2 my-2">
-              <span className="text-2xl font-extrabold text-slate-900">100%</span>
-              <span className="text-xs text-slate-500">ตรวจอัตโนมัติแล้ว</span>
+              <span className="text-2xl font-extrabold text-slate-900">{answerStats.total ? `${answerStats.correctPercent}%` : '0%'}</span>
+              <span className="text-xs text-slate-500">ตอบถูกจากคำตอบทั้งหมด</span>
             </div>
 
             {/* Stacked Progress Bar คำนวณแบบ Dynamic */}
@@ -573,13 +428,13 @@ export default function App() {
                 <div className="p-4 border-b border-slate-100 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <h2 className="font-bold text-slate-800 text-sm md:text-base">รายการผู้ตอบ</h2>
+                      <h2 className="font-bold text-slate-800 text-sm md:text-base">รายการผู้ตอบ{selectedCampus ? ` • ${selectedCampus}` : ' • ทุกวิทยาเขต'}</h2>
                       <span className="bg-emerald-50 text-emerald-800 text-xs px-2 py-0.5 rounded-full font-medium">
-                        {studentsList.length} คน
+                        {filteredUniqueStudentCount} คน
                       </span>
                     </div>
                     <span className="text-[11px] text-slate-400">
-                      ล่าสุด 28 ต.ค. 2569 • 10:45 น.
+                      {studentsList[0] ? `ล่าสุด ${studentsList[0].date} • ${studentsList[0].time}` : 'ยังไม่มีการส่งคำตอบ'}
                     </span>
                   </div>
 
@@ -594,9 +449,18 @@ export default function App() {
                         className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white transition-all"
                       />
                     </div>
-                    <button className="inline-flex items-center space-x-1 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors">
-                      <Filter className="w-3.5 h-3.5 text-slate-500" />
-                      <span>ทุกสถานะ</span>
+                    <div className="relative">
+                      <Filter className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <select aria-label="ตัวกรองรายการผู้ตอบ" value={responseSort} onChange={(event) => setResponseSort(event.target.value)} className="appearance-none w-36 rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs font-medium text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                        <option value="all">ทุกสถานะ</option>
+                        <option value="time">เวลา • ตอบเร็วสุด</option>
+                        <option value="correct">ถูกต้อง • คะแนนสูงสุด</option>
+                        <option value="combined">เวลาและถูกต้อง</option>
+                      </select>
+                    </div>
+                    <button type="button" aria-pressed={pinnedOnly} onClick={() => setPinnedOnly((value) => !value)} className={`inline-flex items-center space-x-1 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${pinnedOnly ? 'border-amber-300 bg-amber-100 text-amber-800' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'}`}>
+                      <Pin className="h-3.5 w-3.5" />
+                      <span>ปักหมุด {pinnedStudentCount}</span>
                     </button>
                   </div>
                 </div>
@@ -609,12 +473,13 @@ export default function App() {
                         <th className="py-2.5 px-4">หลักสูตร / คณะ</th>
                         <th className="py-2.5 px-4">เวลาที่ตอบ</th>
                         <th className="py-2.5 px-4 text-center">การตรวจ</th>
+                        <th className="py-2.5 px-3 text-center">ปักหมุด</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs">
                       {filteredStudents.length > 0 ? (
                         filteredStudents.map((student) => {
-                          const isSelected = selectedStudent.id === student.id;
+                          const isSelected = displayedStudent?.submissionId === student.submissionId;
                           return (
                             <tr
                               key={student.id}
@@ -627,7 +492,10 @@ export default function App() {
                             >
                               <td className="py-3 px-4">
                                 <div className="text-slate-900 font-semibold">{student.name}</div>
-                                <div className="text-[11px] text-slate-400 font-normal">{student.id}</div>
+                                <div className="flex items-center gap-2 text-[11px] text-slate-400 font-normal">
+                                  <span>{student.id}</span>
+                                  {student.isPinned && <Pin className="h-3 w-3 fill-amber-500 text-amber-600" aria-label="ปักหมุดแล้ว" />}
+                                </div>
                               </td>
                               <td className="py-3 px-4">
                                 <div className="text-slate-700">{student.degree}</div>
@@ -636,6 +504,12 @@ export default function App() {
                               <td className="py-3 px-4 text-slate-600">
                                 <div>{student.time}</div>
                                 <div className="text-[10px] text-slate-400">{student.date}</div>
+                                {student.durationSeconds != null && <div className="text-[10px] font-medium text-indigo-600">ใช้เวลา {student.durationSeconds < 60 ? `${student.durationSeconds} วินาที` : `${Math.floor(student.durationSeconds / 60)} นาที ${student.durationSeconds % 60} วินาที`}</div>}
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <button type="button" title={student.isPinned ? 'ยกเลิกปักหมุด' : 'ปักหมุดนักศึกษา'} aria-label={student.isPinned ? `ยกเลิกปักหมุด ${student.name}` : `ปักหมุด ${student.name}`} onClick={(event) => { event.stopPropagation(); togglePin(student); }} className={`rounded-md p-1.5 transition-colors ${student.isPinned ? 'text-amber-600 hover:bg-amber-50' : 'text-slate-300 hover:bg-amber-50 hover:text-amber-600'}`}>
+                                  <Pin className={`h-4 w-4 ${student.isPinned ? 'fill-amber-400' : ''}`} />
+                                </button>
                               </td>
                               <td className="py-3 px-4 text-center">
                                 <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-100/70 text-emerald-800">
@@ -648,7 +522,7 @@ export default function App() {
                         })
                       ) : (
                         <tr>
-                          <td colSpan="4" className="text-center py-8 text-slate-400 text-xs">
+                          <td colSpan="5" className="text-center py-8 text-slate-400 text-xs">
                             ไม่พบข้อมูลนักศึกษาที่ค้นหา
                           </td>
                         </tr>
@@ -688,31 +562,32 @@ export default function App() {
                 <h2 className="font-bold text-slate-800 text-sm md:text-base">ผลตรวจอัตโนมัติ</h2>
                 <span className="bg-emerald-50 text-emerald-800 text-[11px] px-2.5 py-0.5 rounded-full font-medium inline-flex items-center space-x-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                  <span>ตรวจอัตโนมัติครบ 3 ข้อ</span>
+                  <span>{displayedStudent ? `ตรวจแล้ว ${displayedStudent.answers.length} ข้อ` : 'ยังไม่มีผลตรวจ'}</span>
                 </span>
               </div>
 
+              {displayedStudent ? <>
               <div className="flex items-start space-x-3">
                 <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-base flex-shrink-0">
-                  {selectedStudent.name.charAt(0)}
+                  {displayedStudent.name.charAt(0)}
                 </div>
                 <div>
                   <div className="font-bold text-slate-900 text-sm flex items-center space-x-2">
-                    <span>{selectedStudent.name}</span>
-                    <span className="text-xs text-slate-400 font-normal">{selectedStudent.id}</span>
+                    <span>{displayedStudent.name}</span>
+                    <span className="text-xs text-slate-400 font-normal">{displayedStudent.id}</span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {selectedStudent.degree} • {selectedStudent.faculty}
+                    {displayedStudent.degree} • {displayedStudent.faculty}
                   </p>
                   <p className="text-[11px] text-slate-400 mt-1 flex items-center space-x-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>ส่งเมื่อ {selectedStudent.date} เวลา {selectedStudent.time} ({courseFilter})</span>
+                    <span>ส่งเมื่อ {displayedStudent.date} เวลา {displayedStudent.time} ({displayedStudent.questionSetTitle})</span>
                   </p>
                 </div>
               </div>
 
               <div className="space-y-3 pt-2">
-                {selectedStudent.answers.map((item) => (
+                {displayedStudent.answers.map((item) => (
                   <div
                     key={item.id}
                     className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 space-y-2 transition-all hover:border-slate-200"
@@ -747,7 +622,7 @@ export default function App() {
 
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                 <div>
-                  <div className="text-xs font-semibold text-slate-800">ตรวจอัตโนมัติครบ 3 ข้อ</div>
+                  <div className="text-xs font-semibold text-slate-800">คะแนน {displayedStudent.score}/{displayedStudent.totalQuestions} ข้อ</div>
                   <div className="text-[10px] text-slate-400">ผลตรวจอัปเดตสมบูรณ์</div>
                 </div>
 
@@ -756,6 +631,7 @@ export default function App() {
                   <span>ดูแลตรวจอัตโนมัติ</span>
                 </button>
               </div>
+              </> : <div className="py-12 text-center text-sm text-slate-400">ยังไม่มีข้อมูลคำตอบสำหรับชุดคำถามนี้</div>}
 
             </div>
 

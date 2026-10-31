@@ -1,13 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Asides from '../components/asides';
+import { questionApi } from '../api';
 import {
-  BookOpen,
-  LayoutGrid,
   ListChecks,
   Bell,
-  User,
   Plus,
-  Eye,
   Pencil,
   GripVertical,
   ArrowUp,
@@ -16,33 +13,31 @@ import {
   Trash2,
   Key,
   Info,
-  ChevronDown,
   MoreHorizontal,
   X,
   Calendar,
   Play,
   Square,
+  CheckCircle2,
 } from "lucide-react";
+
+const mapSet = (set, isActive = false) => ({
+  ...set,
+  desc: set.description,
+  isActive,
+  questionCount: set.questions?.length ?? 0,
+  respondents: `${set.respondent_count ?? 0} คนตอบ`,
+  startDate: set.start_at ? set.start_at.replace(" ", "T").slice(0, 16) : "",
+  endDate: set.end_at ? set.end_at.replace(" ", "T").slice(0, 16) : "",
+});
 
 const QuestionSettingPage = () => {
   // 1. State สำหรับฟอร์มข้อคำถามด้านขวา
-  const [questions, setQuestions] = useState([
-    {
-      id: 1,
-      question: "รหัสผ่านที่ปลอดภัยควรมีลักษณะอย่างไร?",
-      answer: "อย่างน้อย 12 ตัว ผสมอักขระหลายประเภท",
-    },
-    {
-      id: 2,
-      question: "หากได้รับลิงก์น่าสงสัย ควรทำสิ่งใดก่อน?",
-      answer: "ไม่คลิกลิงก์ และตรวจสอบผู้ส่งก่อน",
-    },
-    {
-      id: 3,
-      question: "การยืนยันตัวตนสองขั้นตอนคืออะไร?",
-      answer: "รหัสผ่านร่วมกับรหัสยืนยันอีกชั้น",
-    },
-  ]);
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [apiError, setApiError] = useState("");
+  const [showSavedPopup, setShowSavedPopup] = useState(false);
 
   // 2. State สำหรับเปิด/ปิด Dropdown เมนูจุด 3 จุด
   const [openDropdownId, setOpenDropdownId] = useState(null);
@@ -61,51 +56,26 @@ const QuestionSettingPage = () => {
   const [endDate, setEndDate] = useState("");
 
   // 4. State ข้อมูลชุดคำถามฝั่งซ้าย (เพิ่มฟิลด์ status, startDate, endDate)
-  const [questionSets, setQuestionSets] = useState([
-    {
-      id: 1,
-      title: "ความปลอดภัยดิจิทัล",
-      desc: "ระบบจะเทียบคำตอบกับเฉลยจากฐานข้อมูลและแสดงผลทันทีหลังส่ง",
-      isActive: true,
-      questionCount: 3,
-      respondents: "120 คนตอบ",
-      status: "open",
-      startDate: "",
-      endDate: "",
-    },
-    {
-      id: 2,
-      title: "การใช้ห้องสมุด",
-      desc: "ระบบจะเทียบคำตอบกับเฉลยจากฐานข้อมูลและแสดงผลทันทีหลังส่ง",
-      isActive: false,
-      questionCount: 5,
-      respondents: "ยังไม่มีผู้ตอบ",
-      status: "closed",
-      startDate: "",
-      endDate: "",
-    },
-    {
-      id: 3,
-      title: "จริยธรรมทางวิชาการ",
-      desc: "ระบบจะเทียบคำตอบกับเฉลยจากฐานข้อมูลและแสดงผลทันทีหลังส่ง",
-      isActive: false,
-      questionCount: 4,
-      respondents: "86 คนตอบ",
-      status: "closed",
-      startDate: "",
-      endDate: "",
-    },
-  ]);
+  const [questionSets, setQuestionSets] = useState([]);
+
+  useEffect(() => {
+    questionApi.list()
+      .then((rows) => {
+        setQuestionSets(rows.map((row, index) => mapSet(row, index === 0)));
+        if (rows[0]) setQuestions(rows[0].questions.map((q) => ({
+          id: q.id, question: q.text, answer: q.accepted_answers[0] || "",
+          is_required: Boolean(q.is_required),
+        })));
+      })
+      .catch((error) => setApiError(error.message))
+      .finally(() => setLoading(false));
+  }, []);
 
   // ระบบตรวจจับเวลาอัตโนมัติ (เช็คทุกๆ 1 วินาที)
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
-
-      setQuestionSets(prevSets => {
-        let hasChanges = false;
-        
-        const updatedSets = prevSets.map(set => {
+      questionSets.forEach((set) => {
           let newStatus = set.status;
 
           // 1. ถ้าสถานะเป็น "ตั้งเวลา" และถึงเวลา startDate แล้ว -> เปลี่ยนเป็น "เปิด"
@@ -113,7 +83,6 @@ const QuestionSettingPage = () => {
             const startTime = new Date(set.startDate);
             if (now >= startTime) {
               newStatus = 'open';
-              hasChanges = true;
             }
           }
 
@@ -122,54 +91,43 @@ const QuestionSettingPage = () => {
             const endTime = new Date(set.endDate);
             if (now >= endTime) {
               newStatus = 'closed';
-              hasChanges = true;
             }
           }
 
           if (newStatus !== set.status) {
-            return { ...set, status: newStatus };
+            questionApi.update(set.id, { status: newStatus }).then((saved) => {
+              setQuestionSets((sets) => sets.map((item) => item.id === set.id ? mapSet(saved, item.isActive) : item));
+            }).catch((error) => setApiError(error.message));
           }
-          return set;
-        });
-
-        // คืนค่าใหม่เฉพาะเมื่อมีการเปลี่ยนแปลงสถานะ เพื่อไม่ให้ React Re-render พร่ำเพรื่อ
-        return hasChanges ? updatedSets : prevSets;
       });
-    }, 1000); // 1000 ms = 1 วินาที
+    }, 1000);
 
     // ทำความสะอาดการตั้งเวลาเมื่อออกหน้านี้
     return () => clearInterval(timer);
-  }, []);
+  }, [questionSets]);
 
   // ฟังก์ชันสำหรับบันทึกชุดคำถาม (รองรับทั้งเพิ่มใหม่และแก้ไข)
-  const handleSaveSet = () => {
+  const handleSaveSet = async () => {
     if (!newSetTitle.trim()) return;
-
-    if (modalMode === "add") {
-      const newSet = {
-        id: Date.now(),
-        title: newSetTitle,
-        desc:
-          newSetDesc ||
-          "ระบบจะเทียบคำตอบกับเฉลยจากฐานข้อมูลและแสดงผลทันทีหลังส่ง",
-        isActive: false,
-        questionCount: 0,
-        respondents: "ยังไม่มีผู้ตอบ",
-        status: "closed",
-        startDate: "",
-        endDate: "",
-      };
-      setQuestionSets([newSet, ...questionSets]); // เอาไว้บนสุด
-    } else if (modalMode === "edit") {
-      setQuestionSets(
-        questionSets.map((set) =>
-          set.id === editSetId
-            ? { ...set, title: newSetTitle, desc: newSetDesc }
-            : set,
-        ),
-      );
+    setSaving(true);
+    setApiError("");
+    try {
+      const data = { title: newSetTitle.trim(), description: newSetDesc.trim() };
+      const saved = modalMode === "add"
+        ? await questionApi.create(data)
+        : await questionApi.update(editSetId, data);
+      if (modalMode === "add") {
+        setQuestionSets((sets) => [mapSet(saved, true), ...sets.map((set) => ({ ...set, isActive: false }))]);
+        setQuestions([]);
+      } else {
+        setQuestionSets((sets) => sets.map((set) => set.id === editSetId ? mapSet(saved, set.isActive) : set));
+      }
+      closeMainModal();
+    } catch (error) {
+      setApiError(error.message);
+    } finally {
+      setSaving(false);
     }
-    closeMainModal();
   };
 
   const openEditModal = (set) => {
@@ -190,30 +148,73 @@ const QuestionSettingPage = () => {
   };
 
   // ฟังก์ชันเปลี่ยนสถานะเปิด/ปิดทันที
-  const handleToggleStatus = (id, newStatus) => {
-    setQuestionSets(
-      questionSets.map((set) =>
-        set.id === id
-          ? { ...set, status: newStatus, startDate: "", endDate: "" }
-          : set,
-      ),
-    );
+  const handleToggleStatus = async (id, newStatus) => {
+    try {
+      const saved = await questionApi.update(id, { status: newStatus, start_at: null, end_at: null });
+      setQuestionSets((sets) => sets.map((set) => set.id === id ? mapSet(saved, set.isActive) : set));
+    } catch (error) { setApiError(error.message); }
     setOpenDropdownId(null);
   };
 
   // ฟังก์ชันบันทึกการตั้งเวลา
-  const handleSaveSchedule = () => {
-    setQuestionSets(
-      questionSets.map((set) =>
-        set.id === scheduleTargetId
-          ? { ...set, status: "scheduled", startDate, endDate }
-          : set,
-      ),
-    );
+  const handleSaveSchedule = async () => {
+    try {
+      const saved = await questionApi.update(scheduleTargetId, {
+        status: "scheduled", start_at: startDate || null, end_at: endDate || null,
+      });
+      setQuestionSets((sets) => sets.map((set) => set.id === scheduleTargetId ? mapSet(saved, set.isActive) : set));
+    } catch (error) { setApiError(error.message); }
     setIsScheduleModalOpen(false);
     setScheduleTargetId(null);
     setStartDate("");
     setEndDate("");
+  };
+
+  const handleToggleRequired = (questionId) => {
+    setQuestions((items) => items.map((item) => item.id === questionId
+      ? { ...item, is_required: !item.is_required }
+      : item));
+  };
+
+  const handleMoveQuestion = (index, direction) => {
+    setQuestions((items) => {
+      const destination = index + direction;
+      if (destination < 0 || destination >= items.length) return items;
+      const reordered = [...items];
+      [reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
+      return reordered;
+    });
+  };
+
+  const handleCopyQuestion = (index) => {
+    setQuestions((items) => {
+      const original = items[index];
+      const copy = {
+        ...original,
+        id: `new-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      };
+      return [...items.slice(0, index + 1), copy, ...items.slice(index + 1)];
+    });
+  };
+
+  const handleDeleteQuestion = (questionId) => {
+    setQuestions((items) => items.filter((item) => item.id !== questionId));
+  };
+
+  const handleSaveQuestions = async () => {
+    const activeSet = questionSets.find((set) => set.isActive);
+    if (!activeSet) return;
+    setSaving(true);
+    setApiError("");
+    try {
+      const saved = await questionApi.saveQuestions(activeSet.id, questions.map((q) => ({
+        text: q.question, accepted_answers: q.answer ? [q.answer] : [], is_required: q.is_required ?? true,
+      })));
+      setQuestions(saved.questions.map((q) => ({ id: q.id, question: q.text, answer: q.accepted_answers[0] || "", is_required: Boolean(q.is_required) })));
+      setQuestionSets((sets) => sets.map((set) => set.id === saved.id ? mapSet(saved, set.isActive) : set));
+      setShowSavedPopup(true);
+    } catch (error) { setApiError(error.message); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -380,21 +381,13 @@ const QuestionSettingPage = () => {
               <Bell size={20} />
               <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
             </button>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-700 font-bold text-sm">
-                ส
-              </div>
-              <div className="text-sm">
-                <p className="font-medium leading-none">สุภาวดี ใจดี</p>
-                <p className="text-xs text-gray-500">ผู้ดูแลระบบ</p>
-              </div>
-              <ChevronDown size={16} className="text-gray-400 ml-1" />
-            </div>
           </div>
         </header>
 
         {/* Content Area */}
         <div className="flex-1 overflow-auto p-6">
+          {apiError && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{apiError}</div>}
+          {loading && <p className="mb-4 text-sm text-gray-500">กำลังโหลดข้อมูลจากฐานข้อมูล…</p>}
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-gray-900">ตั้งค่าคำถาม</h1>
             <p className="text-sm text-gray-500 mt-1">
@@ -436,6 +429,10 @@ const QuestionSettingPage = () => {
                           isActive: q.id === set.id,
                         })),
                       );
+                      setQuestions((set.questions || []).map((q) => ({
+                        id: q.id, question: q.text, answer: q.accepted_answers?.[0] || "",
+                        is_required: Boolean(q.is_required),
+                      })));
                     }}
                     className={`relative border rounded-lg p-4 cursor-pointer transition-colors ${
                       set.isActive
@@ -544,10 +541,17 @@ const QuestionSettingPage = () => {
                             className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setQuestionSets(
-                                questionSets.filter((q) => q.id !== set.id),
-                              );
-                              setOpenDropdownId(null);
+                              questionApi.remove(set.id).then(() => {
+                                setQuestionSets((sets) => {
+                                  const remaining = sets.filter((q) => q.id !== set.id);
+                                  if (set.isActive && remaining[0]) {
+                                    remaining[0].isActive = true;
+                                    setQuestions((remaining[0].questions || []).map((q) => ({ id: q.id, question: q.text, answer: q.accepted_answers?.[0] || "", is_required: Boolean(q.is_required) })));
+                                  } else if (!remaining.length) setQuestions([]);
+                                  return remaining;
+                                });
+                                setOpenDropdownId(null);
+                              }).catch((error) => setApiError(error.message));
                             }}
                           >
                             <Trash2 size={14} /> ลบชุดคำถาม
@@ -638,15 +642,8 @@ const QuestionSettingPage = () => {
                                 : "ปิดรับคำตอบ"}
                           </span>
                         </div>
-                        <p className="text-xs text-gray-500">
-                          แก้ไขล่าสุดเมื่อสักครู่ โดย สุภาวดี ใจดี •
-                          ใช้ตรวจอัตโนมัติ
-                        </p>
+                        <p className="text-xs text-gray-500">ใช้ตรวจอัตโนมัติ</p>
                       </div>
-                      <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                        <Eye size={18} />
-                        ดูตัวอย่างแบบฟอร์ม
-                      </button>
                     </div>
 
                     {/* Form Config */}
@@ -724,23 +721,33 @@ const QuestionSettingPage = () => {
                                 </span>
                               </div>
                               <div className="flex items-center gap-4 text-gray-500">
-                                <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                                  จำเป็นต้องตอบ
-                                  <div className="w-9 h-5 bg-emerald-600 rounded-full relative cursor-pointer">
-                                    <div className="w-4 h-4 bg-white rounded-full absolute top-0.5 right-0.5"></div>
-                                  </div>
+                                  <div className="flex items-center gap-2.5 text-sm font-medium text-gray-700">
+                                    <span>จำเป็นต้องตอบ</span>
+                                    <span className={`min-w-[4.5rem] rounded-full px-2 py-1 text-center text-[10px] font-bold transition-colors ${(q.is_required ?? true) ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                      {(q.is_required ?? true) ? 'ต้องตอบ' : 'ไม่บังคับ'}
+                                    </span>
+                                  <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={q.is_required ?? true}
+                                    aria-label={`จำเป็นต้องตอบ: ${q.question || `คำถามข้อที่ ${index + 1}`}`}
+                                    onClick={() => handleToggleRequired(q.id)}
+                                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-transparent shadow-inner transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${(q.is_required ?? true) ? 'bg-gradient-to-r from-emerald-500 to-teal-600' : 'bg-slate-300'}`}
+                                  >
+                                    <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-md ring-1 ring-black/5 transition-transform duration-200 ${(q.is_required ?? true) ? 'translate-x-[1.375rem]' : 'translate-x-0.5'}`} />
+                                  </button>
                                 </div>
                                 <div className="h-4 w-px bg-gray-300"></div>
-                                <button className="hover:text-gray-800">
+                                <button type="button" title="เลื่อนคำถามขึ้น" aria-label={`เลื่อนคำถามข้อที่ ${index + 1} ขึ้น`} disabled={index === 0} onClick={() => handleMoveQuestion(index, -1)} className="hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-30">
                                   <ArrowUp size={16} />
                                 </button>
-                                <button className="hover:text-gray-800">
+                                <button type="button" title="เลื่อนคำถามลง" aria-label={`เลื่อนคำถามข้อที่ ${index + 1} ลง`} disabled={index === questions.length - 1} onClick={() => handleMoveQuestion(index, 1)} className="hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-30">
                                   <ArrowDown size={16} />
                                 </button>
-                                <button className="hover:text-gray-800">
+                                <button type="button" title="คัดลอกคำถาม" aria-label={`คัดลอกคำถามข้อที่ ${index + 1}`} onClick={() => handleCopyQuestion(index)} className="hover:text-gray-800">
                                   <Copy size={16} />
                                 </button>
-                                <button className="hover:text-red-600">
+                                <button type="button" title="ลบคำถาม" aria-label={`ลบคำถามข้อที่ ${index + 1}`} onClick={() => handleDeleteQuestion(q.id)} className="hover:text-red-600">
                                   <Trash2 size={16} />
                                 </button>
                               </div>
@@ -748,7 +755,8 @@ const QuestionSettingPage = () => {
 
                             <input
                               type="text"
-                              defaultValue={q.question}
+                              value={q.question}
+                              onChange={(e) => setQuestions((items) => items.map((item) => item.id === q.id ? { ...item, question: e.target.value } : item))}
                               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
                             />
 
@@ -766,7 +774,8 @@ const QuestionSettingPage = () => {
                               <div className="relative">
                                 <input
                                   type="text"
-                                  defaultValue={q.answer}
+                                  value={q.answer}
+                                  onChange={(e) => setQuestions((items) => items.map((item) => item.id === q.id ? { ...item, answer: e.target.value } : item))}
                                   className="w-full bg-emerald-50/80 border border-emerald-200 rounded-lg px-3 py-2 text-sm text-emerald-900 focus:outline-none focus:bg-white"
                                 />
                                 <button className="absolute right-3 top-1/2 transform -translate-y-1/2 text-emerald-600 hover:text-emerald-800">
@@ -782,7 +791,7 @@ const QuestionSettingPage = () => {
                     <button 
                       onClick={() => {
                         const newQuestion = {
-                          id: Date.now(), // สร้าง ID ใหม่จากเวลาปัจจุบัน
+                          id: `new-${Date.now()}`,
                           question: '',   // สร้างช่องคำถามว่างๆ
                           answer: ''      // สร้างช่องเฉลยว่างๆ
                         };
@@ -818,16 +827,50 @@ const QuestionSettingPage = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button className="px-5 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+              <button onClick={() => {
+                const activeSet = questionSets.find((set) => set.isActive);
+                setQuestions((activeSet?.questions || []).map((q) => ({ id: q.id, question: q.text, answer: q.accepted_answers?.[0] || "", is_required: Boolean(q.is_required) })));
+              }} className="px-5 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
               ยกเลิก
             </button>
-            <button className="flex items-center gap-2 px-5 py-2.5 bg-[#2E6B4F] hover:bg-[#23533D] text-white rounded-lg text-sm font-medium transition-colors">
+            <button onClick={handleSaveQuestions} disabled={saving || loading || !questionSets.length} className="flex items-center gap-2 px-5 py-2.5 bg-[#2E6B4F] hover:bg-[#23533D] disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors">
               <ListChecks size={18} />
-              บันทึกชุดคำถาม
+              {saving ? "กำลังบันทึก…" : "บันทึกชุดคำถาม"}
             </button>
           </div>
         </footer>
       </main>
+      {showSavedPopup && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"
+          onClick={() => setShowSavedPopup(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="saved-popup-title"
+            className="w-full max-w-sm rounded-2xl bg-white p-7 text-center shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+              <CheckCircle2 size={38} />
+            </div>
+            <h2 id="saved-popup-title" className="text-xl font-bold text-slate-900">
+              บันทึกคำถามเรียบร้อยแล้ว
+            </h2>
+            <p className="mt-2 text-sm text-slate-500">
+              ชุดคำถามและเฉลยถูกบันทึกลงฐานข้อมูลแล้ว
+            </p>
+            <button
+              autoFocus
+              onClick={() => setShowSavedPopup(false)}
+              className="mt-6 w-full rounded-xl bg-[#2E6B4F] px-5 py-3 font-semibold text-white transition-colors hover:bg-[#23533D]"
+            >
+              ตกลง
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,7 +1,16 @@
-import React, { useState } from 'react';
-import { BookOpen, Eye, Contact, MessageSquareQuote, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { dashboardApi, questionApi } from '../api';
+import { BookOpen, Eye, Contact, MessageSquareQuote, CheckCircle2, ArrowRight, Sparkles, X } from 'lucide-react';
 
 export default function Home() {
+  const [activeSet, setActiveSet] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [loadingQuestions, setLoadingQuestions] = useState(true);
+  const [savingSubmission, setSavingSubmission] = useState(false);
+  const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [showDuplicatePopup, setShowDuplicatePopup] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [formData, setFormData] = useState({
     fullName: '',
     studentId: '',
@@ -13,9 +22,75 @@ export default function Home() {
     q3: ''
   });
 
+  useEffect(() => {
+    questionApi.list()
+      .then((sets) => {
+        const openSet = sets.find((set) => set.status === 'open') || null;
+        setActiveSet(openSet);
+        setElapsedSeconds(0);
+        if (openSet) setFormData((current) => ({
+          ...current,
+          ...Object.fromEntries(openSet.questions.map((_, index) => [`q${index + 1}`, current[`q${index + 1}`] ?? ''])),
+        }));
+      })
+      .catch((error) => setSubmitError(error.message))
+      .finally(() => setLoadingQuestions(false));
+  }, []);
+
+  useEffect(() => {
+    if (!activeSet || alreadySubmitted) return undefined;
+    const startedAt = Date.now();
+    const timer = setInterval(() => setElapsedSeconds(Math.round((Date.now() - startedAt) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [activeSet, alreadySubmitted]);
+
+  const questions = activeSet?.questions?.length
+    ? activeSet.questions.map((question, index) => ({ id: `q${index + 1}`, questionId: question.id, title: question.text, desc: '', placeholder: 'พิมพ์คำตอบของคุณ...' }))
+    : [
+        { id: 'q1', title: '๑. สิ่งสำคัญที่สุดที่คุณได้เรียนรู้ในการศึกษานี้คืออะไร', desc: 'เล่าถึงความรู้ ทักษะ หรือมุมมองใหม่ พร้อมยกตัวอย่างประกอบ จากประสบการณ์ของคุณ', placeholder: 'สิ่งที่คุณได้เรียนรู้คือ...' },
+        { id: 'q2', title: '๒. คุณพบความท้าทายอะไร และรับมือกับสิ่งนั้นอย่างไร', desc: 'อาจเป็นเรื่องการเรียน การทำงานร่วมกับผู้อื่น หรือการจัดการเวลา', placeholder: 'ความท้าทายที่ค้นพบ และวิธีที่รับมือคือ...' },
+        { id: 'q3', title: '๓. คุณจะนำสิ่งที่ได้เรียนรู้ไปใช้อย่างไร', desc: 'แบ่งปันเป้าหมายและสิ่งที่คุณจะพัฒนาตนเองในการเรียนหรือการทำงานในอนาคต', placeholder: 'สิ่งที่จะนำไปใช้คือ...' },
+      ];
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSubmitError('');
+    if (alreadySubmitted || savingSubmission) return;
+    if (!activeSet) {
+      setSubmitError('ขณะนี้ยังไม่มีชุดคำถามที่เปิดรับคำตอบ');
+      return;
+    }
+    try {
+      setSavingSubmission(true);
+      await dashboardApi.submit({
+        question_set_id: activeSet.id,
+        duration_seconds: elapsedSeconds,
+        student: {
+          student_code: formData.studentId,
+          full_name: formData.fullName,
+          program_name: formData.program,
+          faculty_name: formData.faculty,
+          campus_name: formData.campus,
+        },
+        answers: questions.map((question) => ({ question_id: question.questionId, answer_text: formData[question.id] || '' })),
+      });
+      setAlreadySubmitted(true);
+      setShowSuccessPopup(true);
+      setFormData({ fullName: '', studentId: '', program: '', faculty: '', campus: '', ...Object.fromEntries(questions.map((question) => [question.id, ''])) });
+    } catch (error) {
+      if (error.message === 'ท่านได้ส่งคำตอบแล้ว') {
+        setAlreadySubmitted(true);
+        setShowDuplicatePopup(true);
+      }
+      setSubmitError(error.message);
+    } finally {
+      setSavingSubmission(false);
+    }
   };
 
   return (
@@ -56,7 +131,11 @@ export default function Home() {
           <p className="text-slate-500 font-medium">กรอกข้อมูลนักศึกษา แล้วแบ่งปันประสบการณ์และมุมมองจากการเรียนรู้ของคุณ</p>
         </div>
 
-        <form className="space-y-8">
+        {submitError && !alreadySubmitted && <div role="alert" className="mb-5 rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-rose-700">{submitError}</div>}
+        {loadingQuestions && <div className="rounded-xl border border-slate-200 bg-white px-5 py-8 text-center text-slate-500">กำลังโหลดชุดคำถาม…</div>}
+        {!loadingQuestions && !activeSet && !submitError && <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-8 text-center text-amber-800">ขณะนี้ยังไม่มีชุดคำถามที่เปิดรับคำตอบ</div>}
+        {activeSet && <form className="space-y-8" onSubmit={handleSubmit}>
+          {activeSet && <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-3 text-sm text-blue-800">ชุดคำถาม: <strong>{activeSet.title}</strong></div>}
           
           {/* Section 1: ข้อมูลนักศึกษา */}
           <div className="bg-white/80 backdrop-blur-xl p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-500">
@@ -84,6 +163,7 @@ export default function Home() {
                   <input
                     type="text"
                     name={field.name}
+                    required
                     value={formData[field.name]}
                     onChange={handleChange}
                     placeholder={field.placeholder}
@@ -98,6 +178,7 @@ export default function Home() {
                 <div className="relative">
                   <select
                     name="campus"
+                    required
                     value={formData.campus}
                     onChange={handleChange}
                     className={`w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500 transition-all duration-300 shadow-sm appearance-none cursor-pointer ${formData.campus === '' ? 'text-slate-400' : 'text-slate-700'}`}
@@ -133,26 +214,7 @@ export default function Home() {
             <hr className="border-slate-100 mb-8" />
 
             <div className="space-y-10">
-              {[
-                { 
-                  id: 'q1', 
-                  title: '๑. สิ่งสำคัญที่สุดที่คุณได้เรียนรู้ในการศึกษานี้คืออะไร', 
-                  desc: 'เล่าถึงความรู้ ทักษะ หรือมุมมองใหม่ พร้อมยกตัวอย่างประกอบ จากประสบการณ์ของคุณ',
-                  placeholder: 'สิ่งที่คุณได้เรียนรู้คือ...'
-                },
-                { 
-                  id: 'q2', 
-                  title: '๒. คุณพบความท้าทายอะไร และรับมือกับสิ่งนั้นอย่างไร', 
-                  desc: 'อาจเป็นเรื่องการเรียน การทำงานร่วมกับผู้อื่น หรือการจัดการเวลา',
-                  placeholder: 'ความท้าทายที่ค้นพบ และวิธีที่รับมือคือ...'
-                },
-                { 
-                  id: 'q3', 
-                  title: '๓. คุณจะนำสิ่งที่ได้เรียนรู้ไปใช้อย่างไร', 
-                  desc: 'แบ่งปันเป้าหมายและสิ่งที่คุณจะพัฒนาตนเองในการเรียนหรือการทำงานในอนาคต',
-                  placeholder: 'สิ่งที่จะนำไปใช้คือ...'
-                },
-              ].map((q) => (
+              {questions.map((q) => (
                 <div key={q.id} className="space-y-3">
                   <label className="block">
                     <span className="text-base font-bold text-slate-800">{q.title} <span className="text-rose-500">*</span></span>
@@ -161,6 +223,7 @@ export default function Home() {
                   <div className="relative group/textarea">
                     <textarea
                       name={q.id}
+                      required
                       value={formData[q.id]}
                       onChange={handleChange}
                       placeholder={q.placeholder}
@@ -192,18 +255,19 @@ export default function Home() {
             </div>
             
             <button
-              type="button"
-              className="w-full sm:w-auto relative group overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 px-8 py-4 font-bold text-white shadow-[0_8px_20px_rgba(16,185,129,0.3)] transition-all duration-300 hover:shadow-[0_10px_25px_rgba(16,185,129,0.4)] hover:-translate-y-1 active:translate-y-0"
+              type="submit"
+              disabled={!activeSet || activeSet.questions.length === 0 || savingSubmission || alreadySubmitted}
+              className="w-full sm:w-auto relative group overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 px-8 py-4 font-bold text-white shadow-[0_8px_20px_rgba(16,185,129,0.3)] transition-all duration-300 hover:shadow-[0_10px_25px_rgba(16,185,129,0.4)] hover:-translate-y-1 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <div className="relative z-10 flex items-center justify-center gap-2">
-                <span className="tracking-wide">ส่งคำตอบ</span>
+                <span className="tracking-wide">{savingSubmission ? 'กำลังบันทึก…' : 'ส่งคำตอบ'}</span>
                 <ArrowRight size={18} className="group-hover:translate-x-1.5 transition-transform duration-300" />
               </div>
               {/* Shine effect on hover */}
               <div className="absolute inset-0 h-full w-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
             </button>
           </div>
-        </form>
+        </form>}
       </main>
 
       {/* Footer */}
@@ -215,6 +279,50 @@ export default function Home() {
           <p>สงวนลิขสิทธิ์ © ระบบบันทึกการเรียนรู้</p>
         </div>
       </footer>
+
+      {showSuccessPopup && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="submission-success-title"
+            className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-2xl"
+          >
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+              <CheckCircle2 size={38} />
+            </div>
+            <h2 id="submission-success-title" className="text-xl font-bold text-slate-900">
+              ส่งคำตอบและบันทึกข้อมูลเรียบร้อยแล้ว
+            </h2>
+            <p className="mt-3 text-sm text-slate-500">กรุณารีเฟรชเว็บไซต์หากต้องการปิดหน้าต่างนี้</p>
+          </div>
+        </div>
+      )}
+      {showDuplicatePopup && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="duplicate-submission-title"
+            className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-2xl"
+          >
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+              <X size={36} />
+            </div>
+            <h2 id="duplicate-submission-title" className="text-xl font-bold text-slate-900">
+              ท่านได้ส่งคำตอบแล้ว
+            </h2>
+            <p className="mt-3 text-sm text-slate-500">ไม่สามารถส่งคำตอบซ้ำในชุดคำถามนี้ได้</p>
+            <button
+              autoFocus
+              onClick={() => setShowDuplicatePopup(false)}
+              className="mt-6 w-full rounded-xl bg-rose-600 px-5 py-3 font-semibold text-white transition-colors hover:bg-rose-700"
+            >
+              รับทราบ
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Styles for the button shimmer effect */}
       <style dangerouslySetInnerHTML={{__html: `
