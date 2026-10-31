@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { dashboardApi, questionApi } from '../api';
+import { dashboardApi, publicQuestionApi } from '../api';
 import { BookOpen, Eye, Contact, MessageSquareQuote, CheckCircle2, ArrowRight, Sparkles, X } from 'lucide-react';
 
 export default function Home() {
@@ -23,9 +23,9 @@ export default function Home() {
   });
 
   useEffect(() => {
-    questionApi.list()
+    publicQuestionApi.listOpen()
       .then((sets) => {
-        const openSet = sets.find((set) => set.status === 'open') || null;
+        const openSet = sets[0] || null;
         setActiveSet(openSet);
         setElapsedSeconds(0);
         if (openSet) setFormData((current) => ({
@@ -45,7 +45,7 @@ export default function Home() {
   }, [activeSet, alreadySubmitted]);
 
   const questions = activeSet?.questions?.length
-    ? activeSet.questions.map((question, index) => ({ id: `q${index + 1}`, questionId: question.id, title: question.text, desc: '', placeholder: 'พิมพ์คำตอบของคุณ...' }))
+    ? activeSet.questions.map((question, index) => ({ id: `q${index + 1}`, questionId: question.id, isRequired: Boolean(question.is_required), title: question.text, desc: '', placeholder: 'พิมพ์คำตอบของคุณ...' }))
     : [
         { id: 'q1', title: '๑. สิ่งสำคัญที่สุดที่คุณได้เรียนรู้ในการศึกษานี้คืออะไร', desc: 'เล่าถึงความรู้ ทักษะ หรือมุมมองใหม่ พร้อมยกตัวอย่างประกอบ จากประสบการณ์ของคุณ', placeholder: 'สิ่งที่คุณได้เรียนรู้คือ...' },
         { id: 'q2', title: '๒. คุณพบความท้าทายอะไร และรับมือกับสิ่งนั้นอย่างไร', desc: 'อาจเป็นเรื่องการเรียน การทำงานร่วมกับผู้อื่น หรือการจัดการเวลา', placeholder: 'ความท้าทายที่ค้นพบ และวิธีที่รับมือคือ...' },
@@ -217,13 +217,15 @@ export default function Home() {
               {questions.map((q) => (
                 <div key={q.id} className="space-y-3">
                   <label className="block">
-                    <span className="text-base font-bold text-slate-800">{q.title} <span className="text-rose-500">*</span></span>
+                    <span className="text-base font-bold text-slate-800">
+                      {q.title} {q.isRequired !== false && <span className="text-rose-500">*</span>}
+                    </span>
                     <span className="block font-medium text-slate-500 text-xs mt-1.5">{q.desc}</span>
                   </label>
                   <div className="relative group/textarea">
                     <textarea
                       name={q.id}
-                      required
+                      required={q.isRequired ?? true}
                       value={formData[q.id]}
                       onChange={handleChange}
                       placeholder={q.placeholder}
@@ -250,7 +252,7 @@ export default function Home() {
               <CheckCircle2 size={24} className="text-emerald-500 drop-shadow-sm" />
               <div>
                 <p className="text-sm font-bold">ตรวจสอบข้อมูลให้ถูกต้อง</p>
-                <p className="text-xs text-emerald-600/80 font-medium">โปรดตอบคำถามให้ครบทุกข้อก่อนกดยืนยัน</p>
+                <p className="text-xs text-emerald-600/80 font-medium">กรุณาตอบคำถามที่มีเครื่องหมายจำเป็นก่อนกดยืนยัน</p>
               </div>
             </div>
             

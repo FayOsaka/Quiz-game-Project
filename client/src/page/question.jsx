@@ -580,8 +580,8 @@ const QuestionSettingPage = () => {
                   </span>
                 </div>
                 <p className="text-xs text-emerald-800 mb-3">
-                  ระบุคำตอบที่ยอมรับได้มากกว่า 1 รูปแบบต่อข้อ
-                  เพื่อให้ระบบเทียบคำตอบนักศึกษาได้แม่นยำ
+                  ใส่คีย์เวิร์ดที่ต้องพบในคำตอบ คั่นแต่ละคำด้วยเครื่องหมายจุลภาค (,)
+                  ระบบจะถือว่าถูกเมื่อพบคีย์เวิร์ดครบทุกคำ
                 </p>
                 <p className="text-xs text-emerald-600">
                   เฉลยที่บันทึกไว้จะถูกใช้เทียบคำตอบนักศึกษาโดยอัตโนมัติ
@@ -764,7 +764,7 @@ const QuestionSettingPage = () => {
                               <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-2 text-sm text-emerald-700 font-medium">
                                   <Key size={16} />
-                                  เฉลยสำหรับระบบตรวจอัตโนมัติ
+                                  คีย์เวิร์ดที่ต้องพบในคำตอบ
                                 </div>
                                 <span className="text-xs text-gray-500">
                                   บันทึกในฐานข้อมูลเพื่อเทียบคำตอบและแสดงผลทันทีหลังส่ง
@@ -774,6 +774,7 @@ const QuestionSettingPage = () => {
                               <div className="relative">
                                 <input
                                   type="text"
+                                  placeholder="เช่น แดง หรือ แดง, สีของสายรุ้ง"
                                   value={q.answer}
                                   onChange={(e) => setQuestions((items) => items.map((item) => item.id === q.id ? { ...item, answer: e.target.value } : item))}
                                   className="w-full bg-emerald-50/80 border border-emerald-200 rounded-lg px-3 py-2 text-sm text-emerald-900 focus:outline-none focus:bg-white"
@@ -782,6 +783,9 @@ const QuestionSettingPage = () => {
                                   <Pencil size={16} />
                                 </button>
                               </div>
+                              <p className="mt-2 text-xs text-emerald-700">
+                                คั่นด้วย , เมื่อต้องการให้คำตอบมีหลายคำสำคัญ และผู้ตอบต้องมีครบทุกคำ
+                              </p>
                             </div>
                           </div>
                         </div>

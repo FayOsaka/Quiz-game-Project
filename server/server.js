@@ -6,6 +6,11 @@ import path from 'node:path';
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = process.env.QUESTION_DB_PATH || path.join(directory, 'question.db');
 const port = Number(process.env.API_PORT || 8000);
+const allowedOrigins = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  ...(process.env.CORS_ALLOWED_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
+]);
 const db = new DatabaseSync(dbPath);
 db.exec('PRAGMA foreign_keys = ON');
 
@@ -132,35 +137,93 @@ function normalizeAnswer(value) {
   return String(value ?? '').trim().toLocaleLowerCase().replace(/\s+/gu, ' ');
 }
 
-function send(res, status, value) {
+function parseKeywords(value) {
+  return String(value ?? '')
+    .split(',')
+    .map((keyword) => normalizeAnswer(keyword))
+    .filter(Boolean);
+}
+
+function isWithinSubmissionWindow(set, now = Date.now()) {
+  if (set.status !== 'open') return false;
+  for (const [field, isStart] of [['start_at', true], ['end_at', false]]) {
+    if (!set[field]) continue;
+    const timestamp = Date.parse(String(set[field]).replace(' ', 'T'));
+    if (!Number.isFinite(timestamp)) return false;
+    if (isStart && now < timestamp) return false;
+    if (!isStart && now >= timestamp) return false;
+  }
+  return true;
+}
+
+function readPublicQuestionSets() {
+  return db.prepare("SELECT * FROM question_sets WHERE status = 'open' ORDER BY id DESC").all()
+    .filter((set) => isWithinSubmissionWindow(set))
+    .map((set) => ({
+      id: set.id,
+      title: set.title,
+      description: set.description,
+      start_at: set.start_at,
+      end_at: set.end_at,
+      questions: db.prepare(`
+        SELECT id, text, type, is_required, position
+        FROM questions WHERE question_set_id = ? ORDER BY position, id
+      `).all(set.id),
+    }));
+}
+
+function send(res, status, value, origin) {
   const body = value === undefined ? '' : JSON.stringify(value);
-  res.writeHead(status, {
-    'Access-Control-Allow-Origin': '*',
+  const headers = {
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Content-Type': 'application/json; charset=utf-8',
-  });
+  };
+  if (origin && allowedOrigins.has(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers.Vary = 'Origin';
+  }
+  res.writeHead(status, headers);
   res.end(body);
 }
 
 async function readBody(req) {
-  let raw = '';
-  for await (const chunk of req) raw += chunk;
-  return raw ? JSON.parse(raw) : {};
+  const chunks = [];
+  let length = 0;
+  for await (const chunk of req) {
+    length += chunk.length;
+    if (length > 1024 * 1024) {
+      const error = new Error('Request body exceeds 1 MB');
+      error.statusCode = 413;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+  const raw = Buffer.concat(chunks).toString('utf8');
+  if (!raw) return {};
+  const data = JSON.parse(raw);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    const error = new Error('Request body must be a JSON object');
+    error.statusCode = 400;
+    throw error;
+  }
+  return data;
 }
 
 const server = createServer(async (req, res) => {
-  if (req.method === 'OPTIONS') return send(res, 204);
+  const reply = (status, value) => send(res, status, value, req.headers.origin);
+  if (req.method === 'OPTIONS') return reply(204);
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const parts = url.pathname.split('/').filter(Boolean);
 
   try {
     if (req.method === 'GET' && url.pathname === '/') {
-      return send(res, 200, {
+      return reply(200, {
         name: 'Quiz Game Question API',
         database: dbPath,
         endpoints: [
           'GET /api/health',
+          'GET /api/public/question-sets',
           'GET /api/question-sets',
           'GET /api/dashboard?question_set_id=:id',
           'POST /api/submissions',
@@ -173,39 +236,103 @@ const server = createServer(async (req, res) => {
       });
     }
     if (req.method === 'GET' && url.pathname === '/api/health') {
-      return send(res, 200, { status: 'ok', database: dbPath });
+      return reply(200, { status: 'ok', database: dbPath });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/public/question-sets') {
+      return reply(200, readPublicQuestionSets());
     }
     if (req.method === 'GET' && url.pathname === '/api/question-sets') {
       const ids = db.prepare('SELECT id FROM question_sets ORDER BY id DESC').all();
-      return send(res, 200, ids.map(({ id }) => readSet(id)));
+      return reply(200, ids.map(({ id }) => readSet(id)));
     }
     if (req.method === 'GET' && url.pathname === '/api/dashboard') {
       const rawId = url.searchParams.get('question_set_id');
       const setId = rawId ? Number(rawId) : null;
       if (setId !== null && (!Number.isSafeInteger(setId) || setId < 1)) {
-        return send(res, 400, { error: 'Invalid question_set_id' });
+        return reply(400, { error: 'Invalid question_set_id' });
       }
-      return send(res, 200, readDashboard(setId));
+      return reply(200, readDashboard(setId));
     }
     if (req.method === 'POST' && url.pathname === '/api/submissions') {
       const data = await readBody(req);
-      const setId = Number(data.question_set_id);
-      const student = data.student || data;
-      const studentCode = String(student.student_code || student.studentCode || '').trim();
-      const fullName = String(student.full_name || student.fullName || '').trim();
-      if (!Number.isSafeInteger(setId) || setId < 1 || !studentCode || !fullName || !Array.isArray(data.answers)) {
-        return send(res, 400, { error: 'question_set_id, student_code, full_name, and answers are required' });
+      const rawSetId = data.question_set_id;
+      const setId = typeof rawSetId === 'number'
+        ? rawSetId
+        : (typeof rawSetId === 'string' && /^\d+$/u.test(rawSetId) ? Number(rawSetId) : NaN);
+      const student = data.student === undefined ? data : data.student;
+      if (!student || typeof student !== 'object' || Array.isArray(student)) {
+        return reply(400, { error: 'student must be a JSON object' });
+      }
+      const studentCodeValue = student.student_code ?? student.studentCode;
+      const fullNameValue = student.full_name ?? student.fullName;
+      if (typeof studentCodeValue !== 'string' || typeof fullNameValue !== 'string') {
+        return reply(400, { error: 'student_code and full_name must be strings' });
+      }
+      const studentCode = studentCodeValue.trim();
+      const fullName = fullNameValue.trim();
+      if (!Number.isSafeInteger(setId) || setId < 1 || !studentCode || !fullName || studentCode.length > 64 || fullName.length > 200 || !Array.isArray(data.answers)) {
+        return reply(400, { error: 'question_set_id, student_code, full_name, and answers are required' });
+      }
+      const optionalStudentFields = [
+        student.program_name ?? student.program,
+        student.faculty_name ?? student.faculty,
+        student.campus_name ?? student.campus,
+      ];
+      if (optionalStudentFields.some((value) => value != null && (typeof value !== 'string' || value.length > 200))) {
+        return reply(400, { error: 'program_name, faculty_name, and campus_name must be strings no longer than 200 characters' });
       }
       const set = readSet(setId);
-      if (!set) return send(res, 404, { error: 'Question set not found' });
+      if (!set) return reply(404, { error: 'Question set not found' });
+      if (!isWithinSubmissionWindow(set)) {
+        return reply(403, { error: 'ชุดคำถามนี้ไม่ได้เปิดรับคำตอบในขณะนี้' });
+      }
+
+      const submittedQuestionIds = new Set();
+      const submittedAnswers = [];
+      for (const answer of data.answers) {
+        if (!answer || typeof answer !== 'object' || Array.isArray(answer)) {
+          return reply(400, { error: 'Each answer must be a JSON object' });
+        }
+        const rawQuestionId = answer.question_id;
+        const questionId = typeof rawQuestionId === 'number'
+          ? rawQuestionId
+          : (typeof rawQuestionId === 'string' && /^\d+$/u.test(rawQuestionId) ? Number(rawQuestionId) : NaN);
+        if (!Number.isSafeInteger(questionId) || questionId < 1) {
+          return reply(400, { error: 'question_id must be a positive integer' });
+        }
+        if (submittedQuestionIds.has(questionId)) {
+          return reply(400, { error: `Duplicate question_id: ${questionId}` });
+        }
+        submittedQuestionIds.add(questionId);
+        const question = set.questions.find((item) => item.id === questionId);
+        if (!question) {
+          return reply(400, { error: 'An answer references a question outside this set' });
+        }
+        const text = answer.answer_text ?? answer.answer;
+        if (typeof text !== 'string' || text.length > 10000) {
+          return reply(400, { error: 'answer_text must be a string no longer than 10000 characters' });
+        }
+        submittedAnswers.push({ question, questionId, text });
+      }
+      const missingRequired = set.questions.filter((question) =>
+        Boolean(question.is_required) &&
+        (!submittedQuestionIds.has(question.id) || !submittedAnswers.find((answer) => answer.questionId === question.id)?.text.trim()),
+      );
+      if (missingRequired.length) {
+        return reply(400, {
+          error: 'กรุณาตอบคำถามที่จำเป็นให้ครบ',
+          missing_question_ids: missingRequired.map((question) => question.id),
+        });
+      }
+
       const previousSubmission = db.prepare(`
         SELECT 1 FROM submissions s JOIN students st ON st.id = s.student_id
         WHERE st.student_code = ? AND s.question_set_id = ? LIMIT 1
       `).get(studentCode, setId);
-      if (previousSubmission) return send(res, 409, { error: 'ท่านได้ส่งคำตอบแล้ว' });
-      const validQuestionIds = new Set(set.questions.map((question) => question.id));
-      if (data.answers.some((answer) => !validQuestionIds.has(Number(answer.question_id)))) {
-        return send(res, 400, { error: 'An answer references a question outside this set' });
+      if (previousSubmission) return reply(409, { error: 'ท่านได้ส่งคำตอบแล้ว' });
+      const durationSeconds = data.duration_seconds ?? null;
+      if (durationSeconds !== null && (!Number.isSafeInteger(durationSeconds) || durationSeconds < 0 || durationSeconds > 86400)) {
+        return reply(400, { error: 'duration_seconds must be an integer between 0 and 86400' });
       }
 
       db.exec('BEGIN');
@@ -220,18 +347,20 @@ const server = createServer(async (req, res) => {
             campus_name = excluded.campus_name,
             updated_at = CURRENT_TIMESTAMP
           RETURNING id
-        `).get(studentCode, fullName, student.program_name || student.program || null,
-          student.faculty_name || student.faculty || null, student.campus_name || student.campus || null);
-        const submittedAnswers = data.answers.map((answer) => {
-          const text = String(answer.answer_text ?? answer.answer ?? '');
-          const question = set.questions.find((item) => item.id === Number(answer.question_id));
+        `).get(studentCode, fullName, student.program_name ?? student.program ?? null,
+          student.faculty_name ?? student.faculty ?? null, student.campus_name ?? student.campus ?? null);
+        const gradedAnswers = submittedAnswers.map(({ question, questionId, text }) => {
           const accepted = question.accepted_answers.map((answerText) => ({
             id: db.prepare('SELECT id FROM accepted_answers WHERE question_id = ? AND answer_text = ?').get(question.id, answerText)?.id,
             answer_text: answerText,
+            keywords: parseKeywords(answerText),
           }));
-          const match = accepted.find((row) => normalizeAnswer(row.answer_text) === normalizeAnswer(text));
+          const normalizedText = normalizeAnswer(text);
+          const match = accepted.find((row) =>
+            row.keywords.length > 0 && row.keywords.every((keyword) => normalizedText.includes(keyword)),
+          );
           return {
-            questionId: question.id,
+            questionId,
             questionText: question.text,
             referenceAnswer: accepted.map((row) => row.answer_text).join(' / '),
             text,
@@ -239,22 +368,21 @@ const server = createServer(async (req, res) => {
             matchedAnswerId: match?.id ?? null,
           };
         });
-        const score = submittedAnswers.filter((answer) => answer.isCorrect).length;
+        const score = gradedAnswers.filter((answer) => answer.isCorrect).length;
         const submission = db.prepare(`
           INSERT INTO submissions(question_set_id, student_id, score, total_questions, duration_seconds)
           VALUES (?, ?, ?, ?, ?) RETURNING id
-        `).get(setId, studentRow.id, score, set.questions.length,
-          Number.isFinite(Number(data.duration_seconds)) ? Math.max(0, Math.round(Number(data.duration_seconds))) : null);
+        `).get(setId, studentRow.id, score, set.questions.length, durationSeconds);
         const insertAnswer = db.prepare(`
           INSERT INTO answers(submission_id, question_id, question_text, reference_answer, answer_text, is_correct, matched_answer_id)
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `);
-        submittedAnswers.forEach((answer) => insertAnswer.run(
+        gradedAnswers.forEach((answer) => insertAnswer.run(
           submission.id, answer.questionId, answer.questionText, answer.referenceAnswer,
           answer.text, answer.isCorrect ? 1 : 0, answer.matchedAnswerId,
         ));
         db.exec('COMMIT');
-        return send(res, 201, { submission_id: Number(submission.id), score, total_questions: set.questions.length });
+        return reply(201, { submission_id: Number(submission.id), score, total_questions: set.questions.length });
       } catch (error) {
         db.exec('ROLLBACK');
         throw error;
@@ -263,35 +391,35 @@ const server = createServer(async (req, res) => {
     if (req.method === 'PUT' && parts[0] === 'api' && parts[1] === 'students' && parts[3] === 'pin' && parts.length === 4) {
       const studentCode = decodeURIComponent(parts[2]);
       const data = await readBody(req);
-      if (typeof data.pinned !== 'boolean') return send(res, 400, { error: 'pinned must be a boolean' });
+      if (typeof data.pinned !== 'boolean') return reply(400, { error: 'pinned must be a boolean' });
       const student = db.prepare('SELECT id FROM students WHERE student_code = ?').get(studentCode);
-      if (!student) return send(res, 404, { error: 'Student not found' });
+      if (!student) return reply(404, { error: 'Student not found' });
       if (data.pinned) {
         db.prepare('INSERT OR IGNORE INTO pinned_students(student_id) VALUES (?)').run(student.id);
       } else {
         db.prepare('DELETE FROM pinned_students WHERE student_id = ?').run(student.id);
       }
-      return send(res, 200, { student_code: studentCode, isPinned: data.pinned });
+      return reply(200, { student_code: studentCode, isPinned: data.pinned });
     }
     if (req.method === 'POST' && url.pathname === '/api/question-sets') {
       const data = await readBody(req);
       const title = String(data.title || '').trim();
-      if (!title) return send(res, 400, { error: 'title is required' });
+      if (!title) return reply(400, { error: 'title is required' });
       const result = db.prepare(`
         INSERT INTO question_sets(title, description, status, start_at, end_at)
         VALUES (?, ?, ?, ?, ?)
       `).run(title, data.description || '', data.status || 'closed', data.start_at ?? null, data.end_at ?? null);
-      return send(res, 201, readSet(Number(result.lastInsertRowid)));
+      return reply(201, readSet(Number(result.lastInsertRowid)));
     }
     if (parts[0] === 'api' && parts[1] === 'question-sets' && parts[2]) {
       const id = Number(parts[2]);
-      if (!Number.isSafeInteger(id) || id < 1) return send(res, 400, { error: 'Invalid question set id' });
+      if (!Number.isSafeInteger(id) || id < 1) return reply(400, { error: 'Invalid question set id' });
       const current = readSet(id);
-      if (!current) return send(res, 404, { error: 'Question set not found' });
+      if (!current) return reply(404, { error: 'Question set not found' });
 
       if (req.method === 'PUT' && parts[3] === 'questions' && parts.length === 4) {
         const data = await readBody(req);
-        if (!Array.isArray(data.questions)) return send(res, 400, { error: 'questions must be an array' });
+        if (!Array.isArray(data.questions)) return reply(400, { error: 'questions must be an array' });
         db.exec('BEGIN');
         try {
           db.prepare('DELETE FROM questions WHERE question_set_id = ?').run(id);
@@ -311,34 +439,34 @@ const server = createServer(async (req, res) => {
           db.exec('ROLLBACK');
           throw error;
         }
-        return send(res, 200, readSet(id));
+        return reply(200, readSet(id));
       }
 
       if (req.method === 'PUT' && parts.length === 3) {
         const data = await readBody(req);
         const allowed = ['title', 'description', 'status', 'start_at', 'end_at'];
         const fields = allowed.filter((field) => Object.hasOwn(data, field));
-        if (fields.includes('title') && !String(data.title).trim()) return send(res, 400, { error: 'title is required' });
+        if (fields.includes('title') && !String(data.title).trim()) return reply(400, { error: 'title is required' });
         if (fields.length) {
           const assignments = fields.map((field) => `${field} = ?`).join(', ');
           db.prepare(`UPDATE question_sets SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
             .run(...fields.map((field) => data[field]), id);
         }
-        return send(res, 200, readSet(id));
+        return reply(200, readSet(id));
       }
 
       if (req.method === 'DELETE' && parts.length === 3) {
         db.prepare('DELETE FROM question_sets WHERE id = ?').run(id);
-        return send(res, 204);
+        return reply(204);
       }
     }
-    return send(res, 404, { error: 'Not found' });
+    return reply(404, { error: 'Not found' });
   } catch (error) {
     const duplicateSubmission = error.message.includes('idx_submissions_student_question_set')
       || error.message.includes('submissions.student_id, submissions.question_set_id');
-    const status = duplicateSubmission ? 409 : 400;
-    if (duplicateSubmission) return send(res, status, { error: 'ท่านได้ส่งคำตอบแล้ว' });
-    return send(res, status, { error: error.message });
+    const status = duplicateSubmission ? 409 : (error.statusCode || 400);
+    if (duplicateSubmission) return reply(status, { error: 'ท่านได้ส่งคำตอบแล้ว' });
+    return reply(status, { error: error.message });
   }
 });
 

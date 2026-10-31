@@ -27,6 +27,10 @@ export const questionApi = {
   remove: (id) => request(`/question-sets/${id}`, { method: "DELETE" }),
 };
 
+export const publicQuestionApi = {
+  listOpen: () => request("/public/question-sets"),
+};
+
 export const dashboardApi = {
   getData: (questionSetId = "") => {
     const query = questionSetId ? `?question_set_id=${encodeURIComponent(questionSetId)}` : "";

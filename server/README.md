@@ -12,6 +12,7 @@ The API listens at `http://127.0.0.1:8000`. In a second terminal, start the fron
 
 Endpoints:
 
+- `GET /api/public/question-sets` — sets currently accepting responses, with question text and required flags but no answer keys
 - `GET /api/question-sets` — list sets with their questions and accepted answers
 - `POST /api/question-sets` — create a set (`title`, optional `description`)
 - `PUT /api/question-sets/{id}` — update title, description, status, or schedule
@@ -21,6 +22,12 @@ Endpoints:
 - `GET /api/dashboard?question_set_id={id}` — dashboard list, answer statistics, and question sets (omit id to show all)
 - `POST /api/submissions` — save a student's submission and automatically compare answers to accepted answers
 - `PUT /api/students/{student_code}/pin` — save or remove a student's dashboard pin (`{"pinned": true}`)
+
+Browser CORS access is restricted by default to `http://localhost:5173` and `http://127.0.0.1:5173`. Add other exact origins as a comma-separated `CORS_ALLOWED_ORIGINS` environment variable when needed. This is a browser policy, not authentication; admin endpoints remain unauthenticated in this phase.
+
+## Tests
+
+Run the built-in Node test suite from this folder with `npm test`. Tests create an isolated temporary SQLite database and do not use `question.db`.
 
 Submission JSON shape:
 
