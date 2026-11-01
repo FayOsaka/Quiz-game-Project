@@ -1,10 +1,13 @@
 import { createServer } from 'node:http';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { ensureAuthSchema, randomToken, sha256, verifyPassword } from './auth.js';
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
+const clientDistDirectory = path.resolve(directory, '../client/dist');
 const dbPath = process.env.QUESTION_DB_PATH || path.join(directory, 'question.db');
 const port = Number(process.env.API_PORT || 8000);
 const allowedOrigins = new Set([
@@ -199,6 +202,82 @@ function send(res, status, value, origin, extraHeaders = {}) {
   res.end(body);
 }
 
+const staticContentTypes = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.ico': 'image/x-icon',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.txt': 'text/plain; charset=utf-8',
+  '.webp': 'image/webp',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+};
+
+async function serveFrontend(req, res, pathname) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    return false;
+  }
+
+  const relativePath = decodedPath.replace(/^\/+/, '');
+  const requestedFile = path.resolve(clientDistDirectory, relativePath || 'index.html');
+  if (requestedFile !== clientDistDirectory && !requestedFile.startsWith(`${clientDistDirectory}${path.sep}`)) {
+    return false;
+  }
+
+  let filePath = requestedFile;
+  let fileInfo;
+  try {
+    fileInfo = await stat(filePath);
+    if (!fileInfo.isFile()) fileInfo = null;
+  } catch {
+    fileInfo = null;
+  }
+
+  // React Router routes should load index.html; missing asset URLs should stay 404s.
+  if (!fileInfo) {
+    if (path.extname(decodedPath)) return false;
+    filePath = path.join(clientDistDirectory, 'index.html');
+    try {
+      fileInfo = await stat(filePath);
+      if (!fileInfo.isFile()) return false;
+    } catch {
+      res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end('Frontend build not found. Run npm run build in the client directory.');
+      return true;
+    }
+  }
+
+  const extension = path.extname(filePath).toLowerCase();
+  const headers = {
+    'Content-Type': staticContentTypes[extension] || 'application/octet-stream',
+    'Content-Length': fileInfo.size,
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': extension === '.html' ? 'no-store' : 'public, max-age=3600',
+  };
+  res.writeHead(200, headers);
+  if (req.method === 'HEAD') {
+    res.end();
+    return true;
+  }
+  const stream = createReadStream(filePath);
+  stream.on('error', () => {
+    if (!res.headersSent) res.writeHead(500);
+    res.end();
+  });
+  stream.pipe(res);
+  return true;
+}
+
 function readCookie(req, name) {
   const cookieHeader = req.headers.cookie || '';
   for (const segment of cookieHeader.split(';')) {
@@ -332,24 +411,7 @@ const server = createServer(async (req, res) => {
 
   try {
     if (req.method === 'GET' && url.pathname === '/') {
-      return reply(200, {
-        name: 'Quiz Game Question API',
-        endpoints: [
-          'GET /api/health',
-          'POST /api/auth/login',
-          'GET /api/auth/session',
-          'POST /api/auth/logout',
-          'GET /api/public/question-sets',
-          'GET /api/question-sets',
-          'GET /api/dashboard?question_set_id=:id',
-          'POST /api/submissions',
-          'PUT /api/students/:student_code/pin',
-          'POST /api/question-sets',
-          'PUT /api/question-sets/:id',
-          'PUT /api/question-sets/:id/questions',
-          'DELETE /api/question-sets/:id',
-        ],
-      });
+      if (await serveFrontend(req, res, url.pathname)) return;
     }
     if (req.method === 'GET' && url.pathname === '/api/health') {
       return reply(200, { status: 'ok' });
@@ -701,6 +763,8 @@ const server = createServer(async (req, res) => {
         return reply(204);
       }
     }
+    if (url.pathname.startsWith('/api/')) return reply(404, { error: 'Not found' });
+    if (await serveFrontend(req, res, url.pathname)) return;
     return reply(404, { error: 'Not found' });
   } catch (error) {
     const duplicateSubmission = error.message.includes('idx_submissions_student_question_set')

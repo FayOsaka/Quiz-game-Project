@@ -10,6 +10,45 @@ npm run dev
 
 The API listens at `http://127.0.0.1:8000`. In a second terminal, start the frontend with `cd ..\client; npm run dev`; Vite forwards `/api` to this server.
 
+## Share a production build through a public URL
+
+The Node server can serve the built React app and the API from the same origin. Build the frontend once before starting the production server:
+
+```powershell
+cd ..\client
+npm run build
+cd ..\server
+```
+
+For a temporary public link, use a Cloudflare Quick Tunnel. Keep the API bound to `127.0.0.1`; do not expose port 8000 directly on your router or firewall. Start the server and tunnel in separate PowerShell windows:
+
+```powershell
+# Server window: start once to obtain the temporary tunnel URL
+$env:NODE_ENV = 'production'
+$env:COOKIE_SECURE = 'true'
+$env:TRUST_CLOUDFLARE_PROXY = 'true'
+npm start
+```
+
+```powershell
+# Tunnel window
+cloudflared tunnel --url http://127.0.0.1:8000
+```
+
+Cloudflare prints a URL such as `https://example-name.trycloudflare.com`. Stop the server with Ctrl+C, then start it again with that exact URL allowed:
+
+```powershell
+$env:NODE_ENV = 'production'
+$env:COOKIE_SECURE = 'true'
+$env:TRUST_CLOUDFLARE_PROXY = 'true'
+$env:CORS_ALLOWED_ORIGINS = 'https://example-name.trycloudflare.com'
+npm start
+```
+
+Leave both windows running and share the `https://...trycloudflare.com` URL. The URL changes when the tunnel process stops. Quick Tunnels are intended for testing and development, have no uptime guarantee, and allow up to 200 in-flight requests; they are not a proven capacity target for 100–300 simultaneous users. Use a named Cloudflare Tunnel and a domain you control for a stable hostname. Keep the computer awake and connected to the Internet for the whole event. The SQLite database remains on this computer.
+
+If port 8000 is already in use, stop the earlier Quiz Game server in its own terminal with Ctrl+C before starting another instance. Do not terminate an unrelated process by guessing its PID.
+
 Endpoints:
 
 - `GET /api/public/question-sets` — sets currently accepting responses, with question text and required flags but no answer keys
